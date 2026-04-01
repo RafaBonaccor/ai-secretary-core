@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: assistant-core
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/assistant_core}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8090}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  evolution:
+    base-url: ${EVOLUTION_BASE_URL:http://localhost:8080}
+    api-key: ${EVOLUTION_API_KEY:change_me_local_api_key}
+  openai:
+    base-url: ${OPENAI_BASE_URL:http://host.docker.internal:8000/v1}
+    api-key: ${OPENAI_API_KEY:local-test-key}
+    model: ${OPENAI_MODEL:gpt-5.4}
+  security:
+    basic:
+      username: ${APP_BASIC_AUTH_USERNAME:assistant_admin}
+      password: ${APP_BASIC_AUTH_PASSWORD:change_me_assistant_password}
