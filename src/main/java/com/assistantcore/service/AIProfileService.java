@@ -245,6 +245,15 @@ public class AIProfileService {
   }
 
   @Transactional
+  public AIProfileResponse ensureDefaultProfileForTenant(UUID tenantId, String businessType) {
+    return aiProfileRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+      .filter(AIProfile::isDefault)
+      .findFirst()
+      .map(this::toResponse)
+      .orElseGet(() -> createDefaultProfileForBusinessType(tenantId, businessType));
+  }
+
+  @Transactional
   public AIProfileResponse assignProfileToChannel(UUID channelInstanceId, UUID profileId) {
     ChannelInstance channelInstance = channelInstanceRepository.findById(channelInstanceId)
       .orElseThrow(() -> new EntityNotFoundException("Channel instance not found: " + channelInstanceId));
@@ -261,6 +270,41 @@ public class AIProfileService {
     channelInstanceRepository.save(channelInstance);
 
     return toResponse(profile);
+  }
+
+  private AIProfileResponse createDefaultProfileForBusinessType(UUID tenantId, String businessType) {
+    String normalizedBusinessType = normalizeBusinessTypeForPreset(businessType);
+    String presetKey = switch (normalizedBusinessType) {
+      case "dental_clinic" -> "appointment_secretary_dental";
+      case "aesthetics_clinic" -> "appointment_secretary_aesthetics";
+      case "real_estate" -> "sales_assistant_real_estate";
+      case "retail" -> "customer_support_retail";
+      default -> "appointment_secretary_clinic";
+    };
+
+    String slug = switch (presetKey) {
+      case "appointment_secretary_dental" -> "default-dental-secretary";
+      case "appointment_secretary_aesthetics" -> "default-aesthetics-secretary";
+      case "sales_assistant_real_estate" -> "default-real-estate-assistant";
+      case "customer_support_retail" -> "default-retail-support";
+      default -> "default-appointment-secretary";
+    };
+
+    return createFromPreset(
+      tenantId,
+      new AIProfilePresetCreateRequest(
+        presetKey,
+        null,
+        slug,
+        "pt-BR",
+        null,
+        null,
+        null,
+        null,
+        true,
+        true
+      )
+    );
   }
 
   private Tenant getTenant(UUID tenantId) {
@@ -298,6 +342,23 @@ public class AIProfileService {
 
   private String normalizeLanguage(String value) {
     return hasText(value) ? value.trim() : "pt-BR";
+  }
+
+  private String normalizeBusinessTypeForPreset(String value) {
+    if (!hasText(value)) {
+      return "medical_clinic";
+    }
+
+    String normalized = normalizeKey(value);
+
+    return switch (normalized) {
+      case "dental", "dentist", "dentistry", "dental_clinic", "odontologia", "odontologico", "odontologica" -> "dental_clinic";
+      case "esthetic", "esthetics", "aesthetic", "aesthetics", "aesthetics_clinic", "beauty", "beauty_salon", "salon", "estetica" -> "aesthetics_clinic";
+      case "real_estate", "imobiliaria", "imovel", "imoveis" -> "real_estate";
+      case "retail", "store", "shop", "loja", "support", "customer_support" -> "retail";
+      case "medical", "clinic", "medical_clinic", "clinica", "clinica_medica" -> "medical_clinic";
+      default -> "medical_clinic";
+    };
   }
 
   private String defaultJson(String value, String fallback) {

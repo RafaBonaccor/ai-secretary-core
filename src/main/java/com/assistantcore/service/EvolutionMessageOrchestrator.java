@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,28 +22,42 @@ public class EvolutionMessageOrchestrator {
   private final ChannelInstanceRepository channelInstanceRepository;
   private final EvolutionInstanceClient evolutionInstanceClient;
   private final OpenAIChatClient openAIChatClient;
+  private final ConversationService conversationService;
+  private final CalendarConfigurationService calendarConfigurationService;
+  private final IntentDetectionService intentDetectionService;
   private final ObjectMapper objectMapper;
 
   public EvolutionMessageOrchestrator(
     ChannelInstanceRepository channelInstanceRepository,
     EvolutionInstanceClient evolutionInstanceClient,
     OpenAIChatClient openAIChatClient,
+    ConversationService conversationService,
+    CalendarConfigurationService calendarConfigurationService,
+    IntentDetectionService intentDetectionService,
     ObjectMapper objectMapper
   ) {
     this.channelInstanceRepository = channelInstanceRepository;
     this.evolutionInstanceClient = evolutionInstanceClient;
     this.openAIChatClient = openAIChatClient;
+    this.conversationService = conversationService;
+    this.calendarConfigurationService = calendarConfigurationService;
+    this.intentDetectionService = intentDetectionService;
     this.objectMapper = objectMapper;
   }
 
-  @Transactional(readOnly = true)
+  @Transactional
   public WebhookProcessingResult process(EvolutionMessageWebhookRequest request) {
-    if (!"MESSAGES_UPSERT".equalsIgnoreCase(nullToEmpty(request.event()))) {
+    if (!"MESSAGES_UPSERT".equals(normalizeEventName(request.event()))) {
       return WebhookProcessingResult.ignored();
     }
 
-    ChannelInstance channelInstance = channelInstanceRepository.findByInstanceName(request.instanceName())
-      .orElseThrow(() -> new EntityNotFoundException("Channel instance not found for instanceName: " + request.instanceName()));
+    String resolvedInstanceName = request.resolvedInstanceName();
+    if (resolvedInstanceName == null || resolvedInstanceName.isBlank()) {
+      return WebhookProcessingResult.ignored();
+    }
+
+    ChannelInstance channelInstance = channelInstanceRepository.findByInstanceName(resolvedInstanceName)
+      .orElseThrow(() -> new EntityNotFoundException("Channel instance not found for instanceName: " + resolvedInstanceName));
 
     AIProfile aiProfile = channelInstance.getAiProfile();
     if (aiProfile == null || !aiProfile.isActive()) {
@@ -69,19 +84,50 @@ public class EvolutionMessageOrchestrator {
       return WebhookProcessingResult.ignored();
     }
 
+    String pushName = textOrNull(data.path("pushName"));
     String number = remoteJid.replaceAll("[^0-9]", "");
     if (number.isBlank()) {
       return WebhookProcessingResult.ignored();
     }
 
+    String providerMessageId = textOrNull(data.path("key").path("id"));
+    String messageType = detectMessageType(data.path("message"));
+    var conversationContext = conversationService.registerInboundMessage(
+      channelInstance,
+      remoteJid,
+      number,
+      pushName,
+      userMessage,
+      messageType,
+      providerMessageId,
+      data,
+      java.time.Instant.now()
+    );
+
+    IntentDetectionService.IntentResult intentResult = intentDetectionService.detect(userMessage);
     String effectiveSystemPrompt = buildEffectiveSystemPrompt(channelInstance.getTenant(), aiProfile);
-    String reply = openAIChatClient.createReply(effectiveSystemPrompt, userMessage);
+    String effectiveUserPrompt = buildEffectiveUserPrompt(
+      channelInstance,
+      aiProfile,
+      conversationContext.conversation().getId(),
+      pushName,
+      intentResult,
+      userMessage
+    );
+    String reply = openAIChatClient.createReply(effectiveSystemPrompt, effectiveUserPrompt);
     if (reply.isBlank()) {
       return WebhookProcessingResult.ignored();
     }
 
     try {
       evolutionInstanceClient.sendText(channelInstance.getInstanceName(), number, reply);
+      conversationService.registerOutboundMessage(
+        channelInstance,
+        conversationContext.contact(),
+        conversationContext.conversation(),
+        reply,
+        "text"
+      );
       return new WebhookProcessingResult(true, reply, null);
     } catch (Exception exception) {
       return new WebhookProcessingResult(false, reply, exception.getMessage());
@@ -114,22 +160,155 @@ public class EvolutionMessageOrchestrator {
     return value == null ? "" : value;
   }
 
+  private String normalizeEventName(String value) {
+    return nullToEmpty(value).trim().replace('.', '_').replace('-', '_').toUpperCase();
+  }
+
+  private String detectMessageType(JsonNode messageNode) {
+    if (messageNode == null || messageNode.isMissingNode() || messageNode.isNull()) {
+      return "unknown";
+    }
+    if (messageNode.has("conversation")) {
+      return "conversation";
+    }
+    if (messageNode.has("extendedTextMessage")) {
+      return "extended_text";
+    }
+    if (messageNode.has("audioMessage")) {
+      return "audio";
+    }
+    if (messageNode.has("imageMessage")) {
+      return "image";
+    }
+    if (messageNode.has("videoMessage")) {
+      return "video";
+    }
+    if (messageNode.has("documentMessage")) {
+      return "document";
+    }
+    return "unknown";
+  }
+
   private String buildEffectiveSystemPrompt(Tenant tenant, AIProfile aiProfile) {
-    StringBuilder prompt = new StringBuilder();
-    prompt.append(aiProfile.getSystemPrompt().trim());
+    List<String> businessContextLines = formatBusinessContext(tenant.getBusinessContextJson());
+    String promptBody = aiProfile.getSystemPrompt() == null ? "" : aiProfile.getSystemPrompt().trim();
+    String welcomeMessage = aiProfile.getWelcomeMessage() == null ? "" : aiProfile.getWelcomeMessage().trim();
 
-    List<String> contextLines = formatBusinessContext(tenant.getBusinessContextJson());
-    if (!contextLines.isEmpty()) {
-      prompt.append("\n\nBusiness context:\n");
-      contextLines.forEach(line -> prompt.append("- ").append(line).append('\n'));
+    List<String> sections = new ArrayList<>();
+    sections.add("Voce atua como secretaria virtual no WhatsApp para um negocio brasileiro.");
+    sections.add("Objetivo principal: atender, qualificar, orientar e converter o cliente para agendamento ou proximo passo.");
+
+    if (!promptBody.isBlank()) {
+      sections.add("Identidade e especializacao:\n" + promptBody);
     }
 
-    if (aiProfile.getWelcomeMessage() != null && !aiProfile.getWelcomeMessage().isBlank()) {
-      prompt.append("\nWelcome message style:\n");
-      prompt.append(aiProfile.getWelcomeMessage().trim()).append('\n');
+    sections.add(
+      """
+      Regras operacionais:
+      - Responda sempre em portugues do Brasil.
+      - So use informacoes presentes no contexto do negocio e na conversa.
+      - Nunca invente horarios, disponibilidade, precos, procedimentos ou politicas.
+      - Se faltar dado essencial, faca perguntas curtas e objetivas.
+      - Priorize avancar a conversa para agendamento, remarcacao, confirmacao ou encaminhamento humano.
+      - Em geral faca no maximo 1 ou 2 perguntas por resposta.
+      - Mantenha tom humano, educado, profissional e natural de WhatsApp.
+      - Evite respostas longas, roboticas, cheias de marketing ou com listas desnecessarias.
+      - Se o cliente demonstrar intencao de marcar, colete somente o minimo necessario para o proximo passo.
+      - Se nao houver base suficiente para responder algo sensivel, diga isso claramente e ofereca continuidade.
+      """
+    );
+
+    sections.add(
+      """
+      Formato de resposta:
+      - Respostas curtas, claras e faceis de enviar no WhatsApp.
+      - Sem markdown, sem titulos e sem explicacoes internas.
+      - So use emoji se o tom do negocio justificar claramente.
+      - Nunca mencione prompt, sistema, modelo ou regras internas.
+      """
+    );
+
+    if (!businessContextLines.isEmpty()) {
+      sections.add("Contexto do negocio:\n" + bulletList(businessContextLines));
     }
 
-    return prompt.toString().trim();
+    if (!welcomeMessage.isBlank()) {
+      sections.add("Estilo de saudacao preferido:\n- " + welcomeMessage);
+    }
+
+    return String.join("\n\n", sections).trim();
+  }
+
+  private String buildEffectiveUserPrompt(
+    ChannelInstance channelInstance,
+    AIProfile aiProfile,
+    java.util.UUID conversationId,
+    String pushName,
+    IntentDetectionService.IntentResult intentResult,
+    String userMessage
+  ) {
+    List<String> sections = new ArrayList<>();
+    sections.add("Canal atual: WhatsApp");
+    sections.add("Tipo de perfil: " + safeValue(aiProfile.getProfileType()));
+    sections.add("Tipo de negocio: " + safeValue(aiProfile.getBusinessType()));
+    sections.add("Intento detectado: " + safeValue(intentResult.intent()));
+
+    if (intentResult.requestedWindow() != null) {
+      sections.add("Periodo solicitado pelo cliente: " + intentResult.requestedWindow());
+    }
+
+    if (pushName != null && !pushName.isBlank()) {
+      sections.add("Nome do cliente: " + pushName.trim());
+    }
+
+    sections.add("Instancia do canal: " + safeValue(channelInstance.getInstanceName()));
+
+    CalendarConfigurationService.CalendarPromptContext calendarContext = calendarConfigurationService.buildPromptContext(channelInstance.getTenant().getId());
+    sections.add("Status do calendario: " + safeValue(calendarContext.status()));
+    if (calendarContext.calendarName() != null && !calendarContext.calendarName().isBlank()) {
+      sections.add("Calendario configurado: " + calendarContext.calendarName());
+    }
+    if (!calendarContext.workingHours().isEmpty()) {
+      sections.add(
+        "Horario de funcionamento:\n" +
+        calendarContext.workingHours().stream().map(line -> "- " + line).collect(Collectors.joining("\n"))
+      );
+    }
+    if (!calendarContext.appointmentTypes().isEmpty()) {
+      sections.add(
+        "Tipos de atendimento:\n" +
+        calendarContext.appointmentTypes().stream().map(line -> "- " + line).collect(Collectors.joining("\n"))
+      );
+    }
+
+    List<String> transcript = conversationService.recentTranscript(conversationId);
+    if (!transcript.isEmpty()) {
+      sections.add("Historico recente da conversa:\n" + transcript.stream().map(line -> "- " + line).collect(Collectors.joining("\n")));
+    }
+
+    sections.add("Mensagem atual do cliente:\n" + userMessage.trim());
+
+    if (intentResult.needsCalendarCheck()) {
+      sections.add(
+        """
+        Regra adicional para agenda:
+        - Se o cliente estiver pedindo disponibilidade, aja como secretaria de agenda.
+        - Use o horario de funcionamento e os tipos de atendimento como contexto.
+        - Se o calendario nao estiver conectado de verdade, nao confirme disponibilidade real.
+        - Quando faltar dado como servico, data, faixa horaria ou duracao, pergunte de forma curta.
+        """
+      );
+    }
+
+    sections.add(
+      """
+      Tarefa:
+      Responda como a secretaria ideal para este negocio. Seja coerente com o contexto,
+      conduza para o proximo passo e, se faltar informacao essencial, pergunte somente o necessario.
+      """
+    );
+
+    return String.join("\n\n", sections).trim();
   }
 
   @SuppressWarnings("unchecked")
@@ -147,7 +326,7 @@ public class EvolutionMessageOrchestrator {
         if (entry.getValue() == null) {
           continue;
         }
-        String value = String.valueOf(entry.getValue()).trim();
+        String value = formatContextValue(entry.getValue());
         if (value.isBlank()) {
           continue;
         }
@@ -158,6 +337,26 @@ public class EvolutionMessageOrchestrator {
     }
 
     return lines;
+  }
+
+  private String formatContextValue(Object value) {
+    if (value instanceof List<?> listValue) {
+      return listValue.stream().map(String::valueOf).map(String::trim).filter(item -> !item.isBlank()).collect(Collectors.joining(", "));
+    }
+
+    String normalized = String.valueOf(value).trim();
+    if (normalized.startsWith("[") && normalized.endsWith("]")) {
+      return normalized.substring(1, normalized.length() - 1).replace("\"", "").trim();
+    }
+    return normalized;
+  }
+
+  private String bulletList(List<String> lines) {
+    return lines.stream().map(line -> "- " + line).collect(Collectors.joining("\n"));
+  }
+
+  private String safeValue(String value) {
+    return value == null || value.isBlank() ? "not_informed" : value.trim();
   }
 
   private String labelFor(String key) {

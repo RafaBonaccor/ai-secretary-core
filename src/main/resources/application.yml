@@ -26,10 +26,16 @@ app:
   evolution:
     base-url: ${EVOLUTION_BASE_URL:http://localhost:8080}
     api-key: ${EVOLUTION_API_KEY:change_me_local_api_key}
+    webhook-base-url: ${APP_WEBHOOK_BASE_URL:http://host.docker.internal:8090}
   openai:
     base-url: ${OPENAI_BASE_URL:http://host.docker.internal:8000/v1}
     api-key: ${OPENAI_API_KEY:local-test-key}
     model: ${OPENAI_MODEL:gpt-5.4}
+  google:
+    oauth:
+      client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+      client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_OAUTH_REDIRECT_URI:http://127.0.0.1:8090/api/v1/oauth/google/calendar/callback}
   security:
     basic:
       username: ${APP_BASIC_AUTH_USERNAME:assistant_admin}

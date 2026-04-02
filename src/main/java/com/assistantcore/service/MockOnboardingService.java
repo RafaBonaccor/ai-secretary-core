@@ -2,6 +2,7 @@ package com.assistantcore.service;
 
 import com.assistantcore.dto.MockOnboardingRequest;
 import com.assistantcore.dto.MockOnboardingResponse;
+import com.assistantcore.dto.AIProfileResponse;
 import com.assistantcore.model.ChannelInstance;
 import com.assistantcore.model.Plan;
 import com.assistantcore.model.Subscription;
@@ -31,6 +32,7 @@ public class MockOnboardingService {
   private final SubscriptionRepository subscriptionRepository;
   private final ChannelInstanceRepository channelInstanceRepository;
   private final EvolutionInstanceClient evolutionInstanceClient;
+  private final AIProfileService aiProfileService;
   private final ObjectMapper objectMapper;
 
   public MockOnboardingService(
@@ -39,6 +41,7 @@ public class MockOnboardingService {
     SubscriptionRepository subscriptionRepository,
     ChannelInstanceRepository channelInstanceRepository,
     EvolutionInstanceClient evolutionInstanceClient,
+    AIProfileService aiProfileService,
     ObjectMapper objectMapper
   ) {
     this.tenantRepository = tenantRepository;
@@ -46,6 +49,7 @@ public class MockOnboardingService {
     this.subscriptionRepository = subscriptionRepository;
     this.channelInstanceRepository = channelInstanceRepository;
     this.evolutionInstanceClient = evolutionInstanceClient;
+    this.aiProfileService = aiProfileService;
     this.objectMapper = objectMapper;
   }
 
@@ -99,6 +103,9 @@ public class MockOnboardingService {
     channelInstance.setUpdatedAt(now);
     channelInstanceRepository.save(channelInstance);
 
+    AIProfileResponse defaultProfile = aiProfileService.ensureDefaultProfileForTenant(tenant.getId(), request.businessType());
+    aiProfileService.assignProfileToChannel(channelInstance.getId(), defaultProfile.id());
+
     boolean evolutionInstanceCreated = false;
     boolean evolutionConnectRequested = false;
 
@@ -125,10 +132,12 @@ public class MockOnboardingService {
       tenant.getId(),
       subscription.getId(),
       channelInstance.getId(),
+      defaultProfile.id(),
       tenant.getName(),
       plan.getCode(),
       normalizedPhoneNumber,
       channelInstance.getInstanceName(),
+      defaultProfile.name(),
       evolutionInstanceCreated,
       evolutionConnectRequested,
       channelInstance.getStatus(),

@@ -40,7 +40,13 @@ public class SecurityConfig {
     http
       .csrf(csrf -> csrf.disable())
       .authorizeHttpRequests(auth -> auth
-        .requestMatchers("/actuator/health", "/api/v1/health", "/api/v1/webhooks/**", "/api/v1/onboarding/mock").permitAll()
+        .requestMatchers(
+          "/actuator/health",
+          "/api/v1/health",
+          "/api/v1/webhooks/**",
+          "/api/v1/onboarding/mock",
+          "/api/v1/oauth/google/calendar/callback"
+        ).permitAll()
         .anyRequest().authenticated()
       )
       .httpBasic(Customizer.withDefaults());

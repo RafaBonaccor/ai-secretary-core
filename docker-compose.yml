@@ -31,9 +31,13 @@ services:
       SERVER_PORT: 8090
       EVOLUTION_BASE_URL: http://host.docker.internal:8080
       EVOLUTION_API_KEY: change_me_local_api_key
+      APP_WEBHOOK_BASE_URL: http://host.docker.internal:8090
       OPENAI_BASE_URL: http://host.docker.internal:8000/v1
       OPENAI_API_KEY: local-test-key
       OPENAI_MODEL: gpt-5.4
+      GOOGLE_OAUTH_CLIENT_ID: ""
+      GOOGLE_OAUTH_CLIENT_SECRET: ""
+      GOOGLE_OAUTH_REDIRECT_URI: http://localhost:3000/onboarding/google/callback
       APP_BASIC_AUTH_USERNAME: assistant_admin
       APP_BASIC_AUTH_PASSWORD: change_me_assistant_password
     ports:

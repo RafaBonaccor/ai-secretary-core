@@ -9,7 +9,7 @@ Backend di prodotto separato da `evolution-api`.
 - profili AI e prompt
 - profili AI dinamici per tipi diversi di attivita
 - segretaria appuntamenti
-- integrazione calendar
+- dominio calendar e disponibilita
 - automazioni e reminder
 - orchestrazione verso `evolution-api`
 
@@ -60,11 +60,20 @@ Le migration attuali creano e aggiornano queste tabelle:
 - `subscriptions`
 - `channel_instances`
 - `ai_profiles`
+- `contacts`
+- `conversations`
+- `messages`
+- `calendar_connections`
+- `working_hours`
+- `appointment_types`
 
 File migration:
 
 - [V1__init.sql](./src/main/resources/db/migration/V1__init.sql)
 - [V2__ai_profiles_dynamic.sql](./src/main/resources/db/migration/V2__ai_profiles_dynamic.sql)
+- [V3__tenant_business_context.sql](./src/main/resources/db/migration/V3__tenant_business_context.sql)
+- [V4__contacts_conversations_messages.sql](./src/main/resources/db/migration/V4__contacts_conversations_messages.sql)
+- [V5__calendar_availability_domain.sql](./src/main/resources/db/migration/V5__calendar_availability_domain.sql)
 
 ## Avvio con Docker
 
@@ -95,6 +104,9 @@ Variabili principali:
 - `SERVER_PORT`
 - `EVOLUTION_BASE_URL`
 - `EVOLUTION_API_KEY`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
 - `APP_BASIC_AUTH_USERNAME`
 - `APP_BASIC_AUTH_PASSWORD`
 
@@ -116,6 +128,7 @@ Pubblici:
 - `GET /api/v1/health`
 - `POST /api/v1/onboarding/mock`
 - `POST /api/v1/webhooks/evolution/messages`
+- `GET /api/v1/oauth/google/calendar/callback`
 
 Protetti con Basic Auth:
 
@@ -125,6 +138,12 @@ Protetti con Basic Auth:
 - `POST /api/v1/ai-profiles/tenant/{tenantId}/from-preset`
 - `POST /api/v1/ai-profiles/tenant/{tenantId}/appointment-secretary/default`
 - `POST /api/v1/ai-profiles/channel-instances/{channelInstanceId}/assign/{profileId}`
+- `GET /api/v1/calendar-connections/tenant/{tenantId}`
+- `POST /api/v1/calendar-connections/tenant/{tenantId}/google/manual`
+- `PUT /api/v1/calendar-connections/{connectionId}/working-hours`
+- `PUT /api/v1/calendar-connections/{connectionId}/appointment-types`
+- `GET /api/v1/oauth/google/calendar/start/{connectionId}`
+- `GET /api/v1/oauth/google/calendar/available-calendars/{connectionId}`
 
 Credenziali di default per i test:
 
@@ -160,6 +179,59 @@ Flusso consigliato:
 2. crea un profilo AI da preset o custom
 3. assegna il profilo al `channel_instance`
 4. usa quel profilo per orchestrare i messaggi WhatsApp
+
+## Calendar e disponibilita
+
+Il backend ora ha un primo dominio agenda separato da Google OAuth:
+
+- `calendar_connections`
+- `working_hours`
+- `appointment_types`
+
+Questo serve a:
+
+- modellare il calendario che il tenant usera
+- definire orari di lavoro
+- definire durata e buffer dei servizi
+- passare al runtime AI un contesto coerente per richieste di disponibilita
+
+Il webhook rileva gia intenti come:
+
+- `check_availability`
+- `create_appointment`
+- `reschedule_appointment`
+- `cancel_appointment`
+- `pricing_question`
+
+e arricchisce il prompt con:
+
+- stato del calendario
+- orari di lavoro
+- tipi di appuntamento
+- periodo richiesto dal cliente, se rilevato
+
+Per ora non c'e ancora lettura live degli eventi Google Calendar.
+Quindi l'assistente puo gia comportarsi meglio come segretaria,
+ma non deve confermare disponibilita reale finche non colleghiamo Google OAuth e la lettura eventi.
+
+## Google OAuth calendario
+
+E adesso presente il primo flusso OAuth Google lato backend:
+
+1. crea una `calendar_connection`
+2. chiama `GET /api/v1/oauth/google/calendar/start/{connectionId}`
+3. apri `authorizationUrl`
+4. Google richiama `GET /api/v1/oauth/google/calendar/callback`
+5. il backend salva token e prova a collegare il calendario selezionato
+6. puoi leggere i calendari disponibili con `GET /api/v1/oauth/google/calendar/available-calendars/{connectionId}`
+
+Per usarlo davvero devi configurare:
+
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+
+Il redirect URI deve coincidere esattamente con quello registrato nella Google Cloud Console.
 
 ## Esempio onboarding mock
 
