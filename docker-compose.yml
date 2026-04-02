@@ -38,6 +38,8 @@ services:
       GOOGLE_OAUTH_CLIENT_ID: ""
       GOOGLE_OAUTH_CLIENT_SECRET: ""
       GOOGLE_OAUTH_REDIRECT_URI: http://localhost:3000/onboarding/google/callback
+      GOOGLE_OAUTH_TOKEN_ENCRYPTION_SECRET: change_me_google_oauth_token_secret
+      WHATSAPP_BUSINESS_ACCESS_TOKEN: ""
       APP_BASIC_AUTH_USERNAME: assistant_admin
       APP_BASIC_AUTH_PASSWORD: change_me_assistant_password
     ports:

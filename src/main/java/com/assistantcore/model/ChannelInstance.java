@@ -36,6 +36,12 @@ public class ChannelInstance {
   @Column(name = "instance_name", nullable = false, unique = true)
   private String instanceName;
 
+  @Column(name = "provider_external_id")
+  private String providerExternalId;
+
+  @Column(name = "provider_config_json", columnDefinition = "text")
+  private String providerConfigJson;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "ai_profile_id")
   private AIProfile aiProfile;
@@ -63,6 +69,10 @@ public class ChannelInstance {
   public void setDisplayName(String displayName) { this.displayName = displayName; }
   public String getInstanceName() { return instanceName; }
   public void setInstanceName(String instanceName) { this.instanceName = instanceName; }
+  public String getProviderExternalId() { return providerExternalId; }
+  public void setProviderExternalId(String providerExternalId) { this.providerExternalId = providerExternalId; }
+  public String getProviderConfigJson() { return providerConfigJson; }
+  public void setProviderConfigJson(String providerConfigJson) { this.providerConfigJson = providerConfigJson; }
   public AIProfile getAiProfile() { return aiProfile; }
   public void setAiProfile(AIProfile aiProfile) { this.aiProfile = aiProfile; }
   public String getStatus() { return status; }

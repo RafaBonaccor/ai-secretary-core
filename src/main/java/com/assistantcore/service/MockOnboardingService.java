@@ -93,7 +93,7 @@ public class MockOnboardingService {
     ChannelInstance channelInstance = new ChannelInstance();
     channelInstance.setId(UUID.randomUUID());
     channelInstance.setTenant(tenant);
-    channelInstance.setProviderType("evolution");
+    channelInstance.setProviderType("evolution_baileys");
     channelInstance.setChannelType("whatsapp");
     channelInstance.setPhoneNumber(normalizedPhoneNumber);
     channelInstance.setDisplayName(request.ownerName() == null || request.ownerName().isBlank() ? request.businessName().trim() : request.ownerName().trim());
@@ -112,7 +112,7 @@ public class MockOnboardingService {
     if (autoCreateInstance) {
       boolean instanceExists = evolutionInstanceClient.instanceExists(channelInstance.getInstanceName());
       if (!instanceExists) {
-        evolutionInstanceClient.createInstance(channelInstance.getInstanceName());
+        evolutionInstanceClient.createBaileysInstance(channelInstance.getInstanceName());
         evolutionInstanceCreated = true;
       }
       channelInstance.setStatus(autoConnect ? "connection_requested" : "instance_created");

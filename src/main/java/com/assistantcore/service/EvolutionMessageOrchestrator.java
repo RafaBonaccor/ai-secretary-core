@@ -20,28 +20,28 @@ import org.springframework.transaction.annotation.Transactional;
 public class EvolutionMessageOrchestrator {
 
   private final ChannelInstanceRepository channelInstanceRepository;
-  private final EvolutionInstanceClient evolutionInstanceClient;
   private final OpenAIChatClient openAIChatClient;
   private final ConversationService conversationService;
   private final CalendarConfigurationService calendarConfigurationService;
   private final IntentDetectionService intentDetectionService;
+  private final WhatsAppProviderRouter whatsAppProviderRouter;
   private final ObjectMapper objectMapper;
 
   public EvolutionMessageOrchestrator(
     ChannelInstanceRepository channelInstanceRepository,
-    EvolutionInstanceClient evolutionInstanceClient,
     OpenAIChatClient openAIChatClient,
     ConversationService conversationService,
     CalendarConfigurationService calendarConfigurationService,
     IntentDetectionService intentDetectionService,
+    WhatsAppProviderRouter whatsAppProviderRouter,
     ObjectMapper objectMapper
   ) {
     this.channelInstanceRepository = channelInstanceRepository;
-    this.evolutionInstanceClient = evolutionInstanceClient;
     this.openAIChatClient = openAIChatClient;
     this.conversationService = conversationService;
     this.calendarConfigurationService = calendarConfigurationService;
     this.intentDetectionService = intentDetectionService;
+    this.whatsAppProviderRouter = whatsAppProviderRouter;
     this.objectMapper = objectMapper;
   }
 
@@ -120,7 +120,7 @@ public class EvolutionMessageOrchestrator {
     }
 
     try {
-      evolutionInstanceClient.sendText(channelInstance.getInstanceName(), number, reply);
+      whatsAppProviderRouter.forChannel(channelInstance).sendText(channelInstance, number, reply);
       conversationService.registerOutboundMessage(
         channelInstance,
         conversationContext.contact(),

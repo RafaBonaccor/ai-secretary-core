@@ -10,6 +10,7 @@ Backend di prodotto separato da `evolution-api`.
 - profili AI dinamici per tipi diversi di attivita
 - segretaria appuntamenti
 - dominio calendar e disponibilita
+- supporto provider WhatsApp `evolution_baileys` e `whatsapp_business`
 - automazioni e reminder
 - orchestrazione verso `evolution-api`
 
@@ -64,6 +65,8 @@ Le migration attuali creano e aggiornano queste tabelle:
 - `conversations`
 - `messages`
 - `calendar_connections`
+- `oauth_states`
+- `google_calendar_credentials`
 - `working_hours`
 - `appointment_types`
 
@@ -74,6 +77,9 @@ File migration:
 - [V3__tenant_business_context.sql](./src/main/resources/db/migration/V3__tenant_business_context.sql)
 - [V4__contacts_conversations_messages.sql](./src/main/resources/db/migration/V4__contacts_conversations_messages.sql)
 - [V5__calendar_availability_domain.sql](./src/main/resources/db/migration/V5__calendar_availability_domain.sql)
+- [V6__google_oauth_states.sql](./src/main/resources/db/migration/V6__google_oauth_states.sql)
+- [V7__google_calendar_credentials.sql](./src/main/resources/db/migration/V7__google_calendar_credentials.sql)
+- [V8__channel_provider_support.sql](./src/main/resources/db/migration/V8__channel_provider_support.sql)
 
 ## Avvio con Docker
 
@@ -107,6 +113,8 @@ Variabili principali:
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_TOKEN_ENCRYPTION_SECRET`
+- `WHATSAPP_BUSINESS_ACCESS_TOKEN`
 - `APP_BASIC_AUTH_USERNAME`
 - `APP_BASIC_AUTH_PASSWORD`
 
@@ -216,22 +224,129 @@ ma non deve confermare disponibilita reale finche non colleghiamo Google OAuth e
 
 ## Google OAuth calendario
 
-E adesso presente il primo flusso OAuth Google lato backend:
+E adesso presente un flusso OAuth Google isolato dal record di configurazione agenda:
 
 1. crea una `calendar_connection`
 2. chiama `GET /api/v1/oauth/google/calendar/start/{connectionId}`
 3. apri `authorizationUrl`
 4. Google richiama `GET /api/v1/oauth/google/calendar/callback`
-5. il backend salva token e prova a collegare il calendario selezionato
-6. puoi leggere i calendari disponibili con `GET /api/v1/oauth/google/calendar/available-calendars/{connectionId}`
+5. il backend salva i token cifrati in `google_calendar_credentials`
+6. il backend aggiorna `calendar_connections` solo con metadati funzionali come email, calendario selezionato e stato
+7. puoi leggere i calendari disponibili con `GET /api/v1/oauth/google/calendar/available-calendars/{connectionId}`
 
 Per usarlo davvero devi configurare:
 
 - `GOOGLE_OAUTH_CLIENT_ID`
 - `GOOGLE_OAUTH_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_TOKEN_ENCRYPTION_SECRET`
 
 Il redirect URI deve coincidere esattamente con quello registrato nella Google Cloud Console.
+
+Note di sicurezza:
+
+- i token Google non devono piu vivere nel record `calendar_connections`
+- `GOOGLE_OAUTH_TOKEN_ENCRYPTION_SECRET` deve essere lungo, casuale e diverso per ogni ambiente
+- il callback OAuth e pubblico per necessita del provider, ma lo `state` resta monouso e con scadenza
+
+## Provider WhatsApp
+
+`assistant-core` ora seleziona un gateway in base a `channel_instances.provider_type`.
+
+Provider supportati:
+
+- `evolution_baileys`
+- `whatsapp_business`
+
+Comportamento:
+
+- `evolution_baileys` usa pairing QR/code e sessioni locali
+- `whatsapp_business` usa l'integrazione `WHATSAPP-BUSINESS` di `evolution-api`
+- l'orchestrazione messaggi e l'outbound non chiamano piu direttamente un solo client hardcoded
+
+Ottimizzazione risorse:
+
+- le istanze Baileys create da `assistant-core` partono con:
+  - `alwaysOnline=false`
+  - `readMessages=false`
+  - `readStatus=false`
+  - `syncFullHistory=false`
+- questo riduce presenza online inutile, sync storico e carico sessione
+- i canali `whatsapp_business` non usano pairing locale e consumano molte meno risorse runtime
+
+Nota pratica:
+
+- usa `evolution_baileys` per onboarding rapido e linked device
+- usa `whatsapp_business` per stabilita e scaling
+- per `whatsapp_business` devi configurare `WHATSAPP_BUSINESS_ACCESS_TOKEN` e valorizzare `provider_external_id` con il `phone_number_id` Meta
+
+## Checklist staging deploy
+
+Obiettivo: mettere online uno staging sicuro abbastanza per test reali, non ancora una produzione aperta a clienti finali.
+
+### 1. Frontend su Vercel
+
+- collega il repo `ai-secretary-web` a Vercel
+- imposta `ASSISTANT_CORE_BASE_URL`
+- imposta `ASSISTANT_CORE_BASIC_USER`
+- imposta `ASSISTANT_CORE_BASIC_PASSWORD`
+- usa dominio preview o staging dedicato
+
+### 2. Database su Supabase
+
+- crea progetto Postgres dedicato
+- prendi connection string diretta o pooler
+- abilita SSL
+- configura backup e retention
+- imposta `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` in `assistant-core`
+
+### 3. Backend runtime fuori da Vercel
+
+- deploya `assistant-core` su VPS, Railway, Render o Fly
+- deploya `evolution-api` su VPS o host equivalente
+- non deployare `assistant-core` o `evolution-api` su Vercel
+- esponi `assistant-core` dietro HTTPS
+- limita IP o proteggi gli endpoint admin appena introduci auth tenant-based
+
+### 4. Variabili obbligatorie di staging
+
+- `EVOLUTION_BASE_URL`
+- `EVOLUTION_API_KEY`
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_TOKEN_ENCRYPTION_SECRET`
+- `WHATSAPP_BUSINESS_ACCESS_TOKEN`
+- `APP_BASIC_AUTH_USERNAME`
+- `APP_BASIC_AUTH_PASSWORD`
+
+### 5. Hardening minimo prima di staging pubblico
+
+- rimuovere o limitare `POST /api/v1/onboarding/mock`
+- aggiungere firma o secret ai webhook Evolution
+- introdurre auth utente vera nel frontend/admin
+- evitare Basic Auth globale condivisa per tenant diversi
+- ruotare le password default di sviluppo
+
+### 6. Cose che puoi gia validare in staging
+
+- onboarding frontend
+- pairing WhatsApp
+- webhook inbound/outbound
+- profili AI
+- collegamento Google Calendar
+- persistenza conversazioni
+
+### 7. Cose da non considerare ancora production-ready
+
+- multi-tenant auth completa
+- isolamento per utente del flow Google OAuth
+- firma webhook forte
+- refresh token Google automatico
+- segregazione completa tra moduli onboarding, WhatsApp e calendar
 
 ## Esempio onboarding mock
 

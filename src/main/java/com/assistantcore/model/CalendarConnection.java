@@ -33,15 +33,6 @@ public class CalendarConnection {
   @Column(name = "google_calendar_name")
   private String googleCalendarName;
 
-  @Column(name = "access_token", columnDefinition = "text")
-  private String accessToken;
-
-  @Column(name = "refresh_token", columnDefinition = "text")
-  private String refreshToken;
-
-  @Column(name = "token_expires_at")
-  private Instant tokenExpiresAt;
-
   @Column(nullable = false)
   private String status;
 
@@ -66,12 +57,6 @@ public class CalendarConnection {
   public void setGoogleCalendarId(String googleCalendarId) { this.googleCalendarId = googleCalendarId; }
   public String getGoogleCalendarName() { return googleCalendarName; }
   public void setGoogleCalendarName(String googleCalendarName) { this.googleCalendarName = googleCalendarName; }
-  public String getAccessToken() { return accessToken; }
-  public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
-  public String getRefreshToken() { return refreshToken; }
-  public void setRefreshToken(String refreshToken) { this.refreshToken = refreshToken; }
-  public Instant getTokenExpiresAt() { return tokenExpiresAt; }
-  public void setTokenExpiresAt(Instant tokenExpiresAt) { this.tokenExpiresAt = tokenExpiresAt; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public String getSyncMode() { return syncMode; }

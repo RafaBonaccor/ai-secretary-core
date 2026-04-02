@@ -40,11 +40,38 @@ public class EvolutionInstanceClient {
     }
   }
 
-  public void createInstance(String instanceName) {
+  public void createBaileysInstance(String instanceName) {
     restClient
       .post()
       .uri("/instance/create")
-      .body(Map.of("instanceName", instanceName, "integration", "WHATSAPP-BAILEYS", "qrcode", true))
+      .body(
+        Map.of(
+          "instanceName", instanceName,
+          "integration", "WHATSAPP-BAILEYS",
+          "qrcode", true,
+          "alwaysOnline", false,
+          "readMessages", false,
+          "readStatus", false,
+          "syncFullHistory", false
+        )
+      )
+      .retrieve()
+      .toBodilessEntity();
+  }
+
+  public void createBusinessInstance(String instanceName, String phoneNumberId, String token) {
+    restClient
+      .post()
+      .uri("/instance/create")
+      .body(
+        Map.of(
+          "instanceName", instanceName,
+          "integration", "WHATSAPP-BUSINESS",
+          "number", phoneNumberId,
+          "token", token,
+          "qrcode", false
+        )
+      )
       .retrieve()
       .toBodilessEntity();
   }

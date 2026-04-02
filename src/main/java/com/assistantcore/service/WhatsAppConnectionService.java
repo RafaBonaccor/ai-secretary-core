@@ -21,6 +21,7 @@ public class WhatsAppConnectionService {
 
   private final ChannelInstanceRepository channelInstanceRepository;
   private final EvolutionInstanceClient evolutionInstanceClient;
+  private final WhatsAppProviderRouter whatsAppProviderRouter;
   private final ObjectMapper objectMapper;
   private final String evolutionWebhookUrl;
   private final Map<String, CachedPairingState> pairingStateCache = new ConcurrentHashMap<>();
@@ -28,11 +29,13 @@ public class WhatsAppConnectionService {
   public WhatsAppConnectionService(
     ChannelInstanceRepository channelInstanceRepository,
     EvolutionInstanceClient evolutionInstanceClient,
+    WhatsAppProviderRouter whatsAppProviderRouter,
     ObjectMapper objectMapper,
     @Value("${app.evolution.webhook-base-url}") String evolutionWebhookBaseUrl
   ) {
     this.channelInstanceRepository = channelInstanceRepository;
     this.evolutionInstanceClient = evolutionInstanceClient;
+    this.whatsAppProviderRouter = whatsAppProviderRouter;
     this.objectMapper = objectMapper;
     this.evolutionWebhookUrl = evolutionWebhookBaseUrl.endsWith("/")
       ? evolutionWebhookBaseUrl + "api/v1/webhooks/evolution/messages"
@@ -42,39 +45,39 @@ public class WhatsAppConnectionService {
   @Transactional
   public WhatsAppConnectionResponse startPairing(UUID channelInstanceId) {
     ChannelInstance channelInstance = getChannelInstance(channelInstanceId);
-    boolean instanceCreated = false;
-
-    if (!evolutionInstanceClient.instanceExists(channelInstance.getInstanceName())) {
-      evolutionInstanceClient.createInstance(channelInstance.getInstanceName());
-      instanceCreated = true;
-      channelInstance.setStatus("instance_created");
+    WhatsAppProviderGateway providerGateway = whatsAppProviderRouter.forChannel(channelInstance);
+    boolean instanceCreated = providerGateway.ensureInstance(channelInstance);
+    if (instanceCreated) {
+      channelInstance.setStatus(providerGateway.requiresPairing(channelInstance) ? "instance_created" : "connected");
       channelInstance.setUpdatedAt(Instant.now());
       channelInstanceRepository.save(channelInstance);
     }
 
     boolean webhookConfigured = ensureMessageWebhook(channelInstance.getInstanceName());
-    Map<String, Object> response = evolutionInstanceClient.connectInstance(channelInstance.getInstanceName(), channelInstance.getPhoneNumber());
+    Map<String, Object> response = providerGateway.startConnection(channelInstance);
     String state = normalizeState(extractState(response));
 
-    channelInstance.setStatus(state == null || state.isBlank() ? "connection_requested" : state);
+    String fallbackState = providerGateway.requiresPairing(channelInstance) ? "connection_requested" : "connected";
+    channelInstance.setStatus(state == null || state.isBlank() ? fallbackState : state);
     channelInstance.setUpdatedAt(Instant.now());
     channelInstanceRepository.save(channelInstance);
 
-    return toResponse(channelInstance, instanceCreated, webhookConfigured, response);
+    return toResponse(channelInstance, instanceCreated, webhookConfigured, response, providerGateway.requiresPairing(channelInstance));
   }
 
   @Transactional
   public WhatsAppConnectionResponse getPairingState(UUID channelInstanceId) {
     ChannelInstance channelInstance = getChannelInstance(channelInstanceId);
+    WhatsAppProviderGateway providerGateway = whatsAppProviderRouter.forChannel(channelInstance);
     boolean webhookConfigured = ensureMessageWebhook(channelInstance.getInstanceName());
-    Map<String, Object> response = evolutionInstanceClient.getConnectionState(channelInstance.getInstanceName());
+    Map<String, Object> response = providerGateway.getConnectionState(channelInstance);
     String state = normalizeState(extractState(response));
     if (state != null && !state.equals(channelInstance.getStatus())) {
       channelInstance.setStatus(state);
       channelInstance.setUpdatedAt(Instant.now());
       channelInstanceRepository.save(channelInstance);
     }
-    return toResponse(channelInstance, false, webhookConfigured, response);
+    return toResponse(channelInstance, false, webhookConfigured, response, providerGateway.requiresPairing(channelInstance));
   }
 
   @Transactional
@@ -177,7 +180,8 @@ public class WhatsAppConnectionService {
     ChannelInstance channelInstance,
     boolean instanceCreated,
     boolean webhookConfigured,
-    Map<String, Object> payload
+    Map<String, Object> payload,
+    boolean requiresPairing
   ) {
     Map<String, Object> instance = payload.get("instance") instanceof Map<?, ?> map
       ? (Map<String, Object>) map
@@ -202,7 +206,7 @@ public class WhatsAppConnectionService {
     );
 
     CachedPairingState cachedPairingState = pairingStateCache.get(channelInstance.getInstanceName());
-    boolean canReuseCachedPairing = "connection_requested".equals(state) || "connecting".equals(state);
+    boolean canReuseCachedPairing = requiresPairing && ("connection_requested".equals(state) || "connecting".equals(state));
 
     if (canReuseCachedPairing && cachedPairingState != null) {
       pairingCode = firstNonBlank(pairingCode, cachedPairingState.pairingCode());
@@ -226,8 +230,10 @@ public class WhatsAppConnectionService {
       ? "WhatsApp disconnected. Start pairing again to reconnect the device."
       : "connected".equals(state)
       ? "WhatsApp connected and ready to receive messages."
-      : qrCodeBase64 != null || pairingCode != null
+      : requiresPairing && (qrCodeBase64 != null || pairingCode != null)
       ? "Finish the WhatsApp pairing with QR code or pairing code."
+      : !requiresPairing
+      ? "WhatsApp Business channel configured without local session pairing."
       : "Waiting for WhatsApp connection state update.";
 
     return new WhatsAppConnectionResponse(
