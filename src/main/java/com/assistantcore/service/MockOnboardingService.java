@@ -33,6 +33,7 @@ public class MockOnboardingService {
   private final ChannelInstanceRepository channelInstanceRepository;
   private final EvolutionInstanceClient evolutionInstanceClient;
   private final AIProfileService aiProfileService;
+  private final AppUserService appUserService;
   private final ObjectMapper objectMapper;
 
   public MockOnboardingService(
@@ -42,6 +43,7 @@ public class MockOnboardingService {
     ChannelInstanceRepository channelInstanceRepository,
     EvolutionInstanceClient evolutionInstanceClient,
     AIProfileService aiProfileService,
+    AppUserService appUserService,
     ObjectMapper objectMapper
   ) {
     this.tenantRepository = tenantRepository;
@@ -50,6 +52,7 @@ public class MockOnboardingService {
     this.channelInstanceRepository = channelInstanceRepository;
     this.evolutionInstanceClient = evolutionInstanceClient;
     this.aiProfileService = aiProfileService;
+    this.appUserService = appUserService;
     this.objectMapper = objectMapper;
   }
 
@@ -74,6 +77,12 @@ public class MockOnboardingService {
     tenant.setCreatedAt(now);
     tenant.setUpdatedAt(now);
     tenantRepository.save(tenant);
+    appUserService.ensureTenantOwner(
+      tenant.getId(),
+      request.ownerSupabaseUserId(),
+      request.ownerEmail(),
+      request.ownerFullName()
+    );
 
     Plan plan = planRepository.findByCode(planCode).orElseGet(() -> createDefaultPlan(planCode, now));
 
