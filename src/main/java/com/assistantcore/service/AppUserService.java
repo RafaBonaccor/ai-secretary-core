@@ -2,11 +2,16 @@ package com.assistantcore.service;
 
 import com.assistantcore.dto.AppUserResponse;
 import com.assistantcore.dto.AppUserSyncRequest;
+import com.assistantcore.dto.AppUserWorkspaceResponse;
 import com.assistantcore.dto.TenantMembershipResponse;
 import com.assistantcore.model.AppUser;
+import com.assistantcore.model.CalendarConnection;
+import com.assistantcore.model.ChannelInstance;
 import com.assistantcore.model.Tenant;
 import com.assistantcore.model.TenantUserMembership;
 import com.assistantcore.repository.AppUserRepository;
+import com.assistantcore.repository.CalendarConnectionRepository;
+import com.assistantcore.repository.ChannelInstanceRepository;
 import com.assistantcore.repository.TenantRepository;
 import com.assistantcore.repository.TenantUserMembershipRepository;
 import java.time.Instant;
@@ -21,15 +26,21 @@ public class AppUserService {
   private final AppUserRepository appUserRepository;
   private final TenantRepository tenantRepository;
   private final TenantUserMembershipRepository tenantUserMembershipRepository;
+  private final ChannelInstanceRepository channelInstanceRepository;
+  private final CalendarConnectionRepository calendarConnectionRepository;
 
   public AppUserService(
     AppUserRepository appUserRepository,
     TenantRepository tenantRepository,
-    TenantUserMembershipRepository tenantUserMembershipRepository
+    TenantUserMembershipRepository tenantUserMembershipRepository,
+    ChannelInstanceRepository channelInstanceRepository,
+    CalendarConnectionRepository calendarConnectionRepository
   ) {
     this.appUserRepository = appUserRepository;
     this.tenantRepository = tenantRepository;
     this.tenantUserMembershipRepository = tenantUserMembershipRepository;
+    this.channelInstanceRepository = channelInstanceRepository;
+    this.calendarConnectionRepository = calendarConnectionRepository;
   }
 
   @Transactional
@@ -94,6 +105,47 @@ public class AppUserService {
       .toList();
   }
 
+  @Transactional(readOnly = true)
+  public AppUserWorkspaceResponse loadWorkspace(String supabaseUserId) {
+    AppUser appUser = appUserRepository.findBySupabaseUserId(supabaseUserId).orElse(null);
+    if (appUser == null) {
+      return emptyWorkspace();
+    }
+
+    TenantUserMembership membership = tenantUserMembershipRepository.findAllByAppUser(appUser).stream()
+      .sorted((left, right) -> membershipRank(left.getRole()) == membershipRank(right.getRole())
+        ? left.getCreatedAt().compareTo(right.getCreatedAt())
+        : Integer.compare(membershipRank(left.getRole()), membershipRank(right.getRole())))
+      .findFirst()
+      .orElse(null);
+
+    if (membership == null) {
+      return emptyWorkspace();
+    }
+
+    Tenant tenant = membership.getTenant();
+    ChannelInstance channelInstance = channelInstanceRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenant.getId()).orElse(null);
+    CalendarConnection calendarConnection = calendarConnectionRepository.findByTenantIdOrderByCreatedAtDesc(tenant.getId()).stream()
+      .findFirst()
+      .orElse(null);
+
+    return new AppUserWorkspaceResponse(
+      true,
+      tenant.getId(),
+      tenant.getName(),
+      tenant.getSlug(),
+      membership.getRole(),
+      channelInstance == null ? null : channelInstance.getId(),
+      channelInstance == null ? null : channelInstance.getStatus(),
+      channelInstance == null ? null : channelInstance.getPhoneNumber(),
+      channelInstance == null ? null : channelInstance.getInstanceName(),
+      calendarConnection == null ? null : calendarConnection.getId(),
+      calendarConnection == null ? null : calendarConnection.getStatus(),
+      calendarConnection == null ? null : calendarConnection.getGoogleAccountEmail(),
+      calendarConnection == null ? null : calendarConnection.getGoogleCalendarName()
+    );
+  }
+
   private AppUserResponse toResponse(AppUser appUser) {
     return new AppUserResponse(
       appUser.getId(),
@@ -102,5 +154,19 @@ public class AppUserService {
       appUser.getFullName(),
       appUser.getStatus()
     );
+  }
+
+  private int membershipRank(String role) {
+    if ("owner".equalsIgnoreCase(role)) {
+      return 0;
+    }
+    if ("admin".equalsIgnoreCase(role)) {
+      return 1;
+    }
+    return 2;
+  }
+
+  private AppUserWorkspaceResponse emptyWorkspace() {
+    return new AppUserWorkspaceResponse(false, null, null, null, null, null, null, null, null, null, null, null, null);
   }
 }

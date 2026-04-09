@@ -139,7 +139,7 @@ public class ConversationService {
   @Transactional(readOnly = true)
   public List<String> recentTranscript(UUID conversationId) {
     return messageRepository
-      .findTop6ByConversationIdOrderBySentAtDesc(conversationId)
+      .findTop16ByConversationIdOrderBySentAtDesc(conversationId)
       .stream()
       .sorted(Comparator.comparing(Message::getSentAt))
       .map(message -> {

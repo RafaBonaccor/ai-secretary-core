@@ -6,5 +6,5 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MessageRepository extends JpaRepository<Message, UUID> {
-  List<Message> findTop6ByConversationIdOrderBySentAtDesc(UUID conversationId);
+  List<Message> findTop16ByConversationIdOrderBySentAtDesc(UUID conversationId);
 }

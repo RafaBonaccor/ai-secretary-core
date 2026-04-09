@@ -20,6 +20,7 @@ public class GoogleOAuthService {
   private final CalendarConnectionRepository calendarConnectionRepository;
   private final OAuthStateRepository oAuthStateRepository;
   private final GoogleCalendarClient googleCalendarClient;
+  private final GoogleCalendarAccessService googleCalendarAccessService;
   private final GoogleCalendarCredentialService googleCalendarCredentialService;
   private final GoogleOAuthTokenCipher googleOAuthTokenCipher;
 
@@ -27,12 +28,14 @@ public class GoogleOAuthService {
     CalendarConnectionRepository calendarConnectionRepository,
     OAuthStateRepository oAuthStateRepository,
     GoogleCalendarClient googleCalendarClient,
+    GoogleCalendarAccessService googleCalendarAccessService,
     GoogleCalendarCredentialService googleCalendarCredentialService,
     GoogleOAuthTokenCipher googleOAuthTokenCipher
   ) {
     this.calendarConnectionRepository = calendarConnectionRepository;
     this.oAuthStateRepository = oAuthStateRepository;
     this.googleCalendarClient = googleCalendarClient;
+    this.googleCalendarAccessService = googleCalendarAccessService;
     this.googleCalendarCredentialService = googleCalendarCredentialService;
     this.googleOAuthTokenCipher = googleOAuthTokenCipher;
   }
@@ -127,7 +130,7 @@ public class GoogleOAuthService {
     CalendarConnection connection = calendarConnectionRepository.findById(connectionId)
       .orElseThrow(() -> new EntityNotFoundException("Calendar connection not found: " + connectionId));
 
-    String accessToken = googleCalendarCredentialService.requireAccessToken(connection.getId());
+    String accessToken = googleCalendarAccessService.requireValidAccessToken(connection.getId());
     return googleCalendarClient.fetchCalendars(accessToken);
   }
 

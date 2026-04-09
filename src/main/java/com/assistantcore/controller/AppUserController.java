@@ -2,6 +2,7 @@ package com.assistantcore.controller;
 
 import com.assistantcore.dto.AppUserResponse;
 import com.assistantcore.dto.AppUserSyncRequest;
+import com.assistantcore.dto.AppUserWorkspaceResponse;
 import com.assistantcore.dto.TenantMembershipResponse;
 import com.assistantcore.service.AppUserService;
 import jakarta.validation.Valid;
@@ -31,5 +32,10 @@ public class AppUserController {
   @GetMapping("/{supabaseUserId}/memberships")
   public List<TenantMembershipResponse> listMemberships(@PathVariable String supabaseUserId) {
     return appUserService.listMemberships(supabaseUserId);
+  }
+
+  @GetMapping("/{supabaseUserId}/workspace")
+  public AppUserWorkspaceResponse workspace(@PathVariable String supabaseUserId) {
+    return appUserService.loadWorkspace(supabaseUserId);
   }
 }

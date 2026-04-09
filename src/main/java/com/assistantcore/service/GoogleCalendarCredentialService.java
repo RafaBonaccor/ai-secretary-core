@@ -57,4 +57,32 @@ public class GoogleCalendarCredentialService {
     return googleCalendarCredentialRepository.findByCalendarConnectionId(connectionId)
       .map(GoogleCalendarCredential::getTokenExpiresAt);
   }
+
+  @Transactional(readOnly = true)
+  public CredentialMaterial requireMaterial(UUID connectionId) {
+    GoogleCalendarCredential credential = googleCalendarCredentialRepository.findByCalendarConnectionId(connectionId)
+      .orElseThrow(() -> new EntityNotFoundException("Google OAuth credential not found for calendar connection: " + connectionId));
+
+    return new CredentialMaterial(
+      googleOAuthTokenCipher.decrypt(credential.getEncryptedAccessToken()),
+      googleOAuthTokenCipher.decrypt(credential.getEncryptedRefreshToken()),
+      credential.getTokenExpiresAt()
+    );
+  }
+
+  @Transactional
+  public void updateTokens(UUID connectionId, String accessToken, String refreshToken, Instant tokenExpiresAt) {
+    GoogleCalendarCredential credential = googleCalendarCredentialRepository.findByCalendarConnectionId(connectionId)
+      .orElseThrow(() -> new EntityNotFoundException("Google OAuth credential not found for calendar connection: " + connectionId));
+
+    credential.setEncryptedAccessToken(googleOAuthTokenCipher.encrypt(accessToken));
+    if (refreshToken != null && !refreshToken.isBlank()) {
+      credential.setEncryptedRefreshToken(googleOAuthTokenCipher.encrypt(refreshToken));
+    }
+    credential.setTokenExpiresAt(tokenExpiresAt);
+    credential.setUpdatedAt(Instant.now());
+    googleCalendarCredentialRepository.save(credential);
+  }
+
+  public record CredentialMaterial(String accessToken, String refreshToken, Instant expiresAt) {}
 }
