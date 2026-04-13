@@ -17,6 +17,7 @@ import com.assistantcore.repository.TenantUserMembershipRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,22 +47,36 @@ public class AppUserService {
   @Transactional
   public AppUserResponse sync(AppUserSyncRequest request) {
     Instant now = Instant.now();
+    String supabaseUserId = request.supabaseUserId().trim();
+    String email = request.email().trim().toLowerCase();
+    String fullName = request.fullName() == null || request.fullName().isBlank() ? null : request.fullName().trim();
 
-    AppUser appUser = appUserRepository.findBySupabaseUserId(request.supabaseUserId()).orElseGet(() -> {
+    AppUser appUser = appUserRepository.findBySupabaseUserId(supabaseUserId).orElseGet(() -> {
       AppUser created = new AppUser();
       created.setId(UUID.randomUUID());
-      created.setSupabaseUserId(request.supabaseUserId().trim());
+      created.setSupabaseUserId(supabaseUserId);
       created.setStatus("active");
       created.setCreatedAt(now);
       return created;
     });
 
-    appUser.setEmail(request.email().trim().toLowerCase());
-    appUser.setFullName(request.fullName() == null || request.fullName().isBlank() ? null : request.fullName().trim());
+    appUser.setEmail(email);
+    appUser.setFullName(fullName);
     appUser.setStatus("active");
     appUser.setUpdatedAt(now);
 
-    AppUser saved = appUserRepository.save(appUser);
+    AppUser saved;
+    try {
+      saved = appUserRepository.saveAndFlush(appUser);
+    } catch (DataIntegrityViolationException exception) {
+      saved = appUserRepository.findBySupabaseUserId(supabaseUserId)
+        .orElseThrow(() -> exception);
+      saved.setEmail(email);
+      saved.setFullName(fullName);
+      saved.setStatus("active");
+      saved.setUpdatedAt(now);
+      saved = appUserRepository.save(saved);
+    }
     return toResponse(saved);
   }
 
