@@ -84,6 +84,25 @@ public class AIProfileService {
       """,
       "{\"channel\":\"whatsapp\",\"country\":\"BR\",\"goal\":\"booking_and_conversion\"}"
     ),
+    "appointment_secretary_law_office",
+    new AIProfilePresetDefinition(
+      "appointment_secretary_law_office",
+      "Secretaria de Escritorio Juridico",
+      "appointment_secretary",
+      "law_office",
+      "pt-BR",
+      "Triagem inicial e agendamento para escritorios de advocacia.",
+      "gpt-5.4",
+      "alloy",
+      "[\"capture_contact\",\"qualify_lead\",\"schedule_visit\",\"handoff_human\"]",
+      """
+      Voce e uma secretaria virtual de escritorio juridico no Brasil.
+      Seu papel e acolher o cliente, identificar a area do caso, coletar os dados iniciais e conduzir para triagem ou agendamento.
+      Nunca ofereca orientacao juridica, promessa de resultado ou interpretacao legal. Quando o cliente pedir analise do caso,
+      explique que a avaliacao sera feita pelo advogado responsavel.
+      """,
+      "{\"channel\":\"whatsapp\",\"country\":\"BR\",\"goal\":\"triage_and_consultation\"}"
+    ),
     "sales_assistant_real_estate",
     new AIProfilePresetDefinition(
       "sales_assistant_real_estate",
@@ -292,6 +311,7 @@ public class AIProfileService {
     String presetKey = switch (normalizedBusinessType) {
       case "dental_clinic" -> "appointment_secretary_dental";
       case "aesthetics_clinic" -> "appointment_secretary_aesthetics";
+      case "law_office" -> "appointment_secretary_law_office";
       case "real_estate" -> "sales_assistant_real_estate";
       case "retail" -> "customer_support_retail";
       default -> "appointment_secretary_clinic";
@@ -300,6 +320,7 @@ public class AIProfileService {
     String slug = switch (presetKey) {
       case "appointment_secretary_dental" -> "default-dental-secretary";
       case "appointment_secretary_aesthetics" -> "default-aesthetics-secretary";
+      case "appointment_secretary_law_office" -> "default-law-office-secretary";
       case "sales_assistant_real_estate" -> "default-real-estate-assistant";
       case "customer_support_retail" -> "default-retail-support";
       default -> "default-appointment-secretary";
@@ -369,6 +390,7 @@ public class AIProfileService {
     return switch (normalized) {
       case "dental", "dentist", "dentistry", "dental_clinic", "odontologia", "odontologico", "odontologica" -> "dental_clinic";
       case "esthetic", "esthetics", "aesthetic", "aesthetics", "aesthetics_clinic", "beauty", "beauty_salon", "salon", "estetica" -> "aesthetics_clinic";
+      case "law", "legal", "law_office", "law_firm", "advocacia", "advogado", "advogada", "escritorio_juridico", "juridico" -> "law_office";
       case "real_estate", "imobiliaria", "imovel", "imoveis" -> "real_estate";
       case "retail", "store", "shop", "loja", "support", "customer_support" -> "retail";
       case "medical", "clinic", "medical_clinic", "clinica", "clinica_medica" -> "medical_clinic";
