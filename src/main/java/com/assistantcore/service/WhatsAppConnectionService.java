@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientResponseException;
 
 @Service
 public class WhatsAppConnectionService {
@@ -69,6 +70,13 @@ public class WhatsAppConnectionService {
   public WhatsAppConnectionResponse getPairingState(UUID channelInstanceId) {
     ChannelInstance channelInstance = getChannelInstance(channelInstanceId);
     WhatsAppProviderGateway providerGateway = whatsAppProviderRouter.forChannel(channelInstance);
+    boolean instanceCreated = providerGateway.ensureInstance(channelInstance);
+    if (instanceCreated) {
+      channelInstance.setStatus(providerGateway.requiresPairing(channelInstance) ? "instance_created" : "connected");
+      channelInstance.setUpdatedAt(Instant.now());
+      channelInstanceRepository.save(channelInstance);
+    }
+
     boolean webhookConfigured = ensureMessageWebhook(channelInstance.getInstanceName());
     Map<String, Object> response = providerGateway.getConnectionState(channelInstance);
     String state = normalizeState(extractState(response));
@@ -77,7 +85,7 @@ public class WhatsAppConnectionService {
       channelInstance.setUpdatedAt(Instant.now());
       channelInstanceRepository.save(channelInstance);
     }
-    return toResponse(channelInstance, false, webhookConfigured, response, providerGateway.requiresPairing(channelInstance));
+    return toResponse(channelInstance, instanceCreated, webhookConfigured, response, providerGateway.requiresPairing(channelInstance));
   }
 
   @Transactional
@@ -136,8 +144,15 @@ public class WhatsAppConnectionService {
   private boolean ensureMessageWebhook(String instanceName) {
     Map<String, Object> webhook = evolutionInstanceClient.getWebhook(instanceName);
     if (webhook.isEmpty()) {
-      evolutionInstanceClient.setMessageWebhook(instanceName, evolutionWebhookUrl);
-      return true;
+      try {
+        evolutionInstanceClient.setMessageWebhook(instanceName, evolutionWebhookUrl);
+        return true;
+      } catch (RestClientResponseException exception) {
+        if (exception.getStatusCode().value() == 404) {
+          return false;
+        }
+        throw exception;
+      }
     }
 
     String existingUrl = webhook.get("url") == null ? null : String.valueOf(webhook.get("url"));
@@ -145,7 +160,14 @@ public class WhatsAppConnectionService {
     boolean missingEvents = webhookEventsMissing(webhook);
 
     if (!enabled || existingUrl == null || !existingUrl.equals(evolutionWebhookUrl) || missingEvents) {
-      evolutionInstanceClient.setMessageWebhook(instanceName, evolutionWebhookUrl);
+      try {
+        evolutionInstanceClient.setMessageWebhook(instanceName, evolutionWebhookUrl);
+      } catch (RestClientResponseException exception) {
+        if (exception.getStatusCode().value() == 404) {
+          return false;
+        }
+        throw exception;
+      }
     }
 
     return true;
