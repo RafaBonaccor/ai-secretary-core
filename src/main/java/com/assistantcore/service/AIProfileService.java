@@ -272,6 +272,21 @@ public class AIProfileService {
     return toResponse(profile);
   }
 
+  @Transactional
+  public AIProfileResponse updateAssignedProfileActiveState(UUID channelInstanceId, boolean active) {
+    ChannelInstance channelInstance = channelInstanceRepository.findById(channelInstanceId)
+      .orElseThrow(() -> new EntityNotFoundException("Channel instance not found: " + channelInstanceId));
+
+    AIProfile profile = channelInstance.getAiProfile();
+    if (profile == null) {
+      throw new IllegalStateException("Channel instance does not have an assigned AI profile");
+    }
+
+    profile.setActive(active);
+    profile.setUpdatedAt(Instant.now());
+    return toResponse(aiProfileRepository.save(profile));
+  }
+
   private AIProfileResponse createDefaultProfileForBusinessType(UUID tenantId, String businessType) {
     String normalizedBusinessType = normalizeBusinessTypeForPreset(businessType);
     String presetKey = switch (normalizedBusinessType) {

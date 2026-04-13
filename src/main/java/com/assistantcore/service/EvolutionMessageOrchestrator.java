@@ -117,7 +117,7 @@ public class EvolutionMessageOrchestrator {
       return null;
     }
 
-    String userMessage = extractTextMessage(data.path("message"));
+    String userMessage = normalizeInboundUserMessage(extractTextMessage(data.path("message")));
     if (userMessage == null || userMessage.isBlank()) {
       return null;
     }
@@ -197,6 +197,17 @@ public class EvolutionMessageOrchestrator {
     }
 
     return null;
+  }
+
+  private String normalizeInboundUserMessage(String rawMessage) {
+    if (rawMessage == null) {
+      return null;
+    }
+
+    String normalized = rawMessage.replace('\u00A0', ' ').trim();
+    normalized = normalized.replaceFirst("(?i)^/gpt(?:\\s+|\\s*[:,-]\\s*)?", "").trim();
+
+    return normalized.isBlank() ? null : normalized;
   }
 
   private String textOrNull(JsonNode node) {

@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "google_calendar_credentials")
+@Table(name = "google_calendar_credentials", schema = "assistant_core")
 public class GoogleCalendarCredential {
 
   @Id

@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "oauth_states")
+@Table(name = "oauth_states", schema = "assistant_core")
 public class OAuthState {
 
   @Id

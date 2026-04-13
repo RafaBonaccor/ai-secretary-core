@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "plans")
+@Table(name = "plans", schema = "assistant_core")
 public class Plan {
 
   @Id

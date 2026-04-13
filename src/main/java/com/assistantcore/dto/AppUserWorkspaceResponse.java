@@ -10,6 +10,8 @@ public record AppUserWorkspaceResponse(
   String role,
   UUID channelInstanceId,
   String channelInstanceStatus,
+  UUID aiProfileId,
+  Boolean aiProfileActive,
   String phoneNumber,
   String instanceName,
   UUID calendarConnectionId,

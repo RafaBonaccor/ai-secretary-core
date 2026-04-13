@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "contacts")
+@Table(name = "contacts", schema = "assistant_core")
 public class Contact {
 
   @Id

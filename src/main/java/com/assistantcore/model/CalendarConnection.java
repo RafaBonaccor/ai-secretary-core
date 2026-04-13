@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "calendar_connections")
+@Table(name = "calendar_connections", schema = "assistant_core")
 public class CalendarConnection {
 
   @Id

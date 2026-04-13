@@ -1,6 +1,7 @@
 package com.assistantcore.controller;
 
 import com.assistantcore.dto.AIProfileCreateRequest;
+import com.assistantcore.dto.AIProfileActiveUpdateRequest;
 import com.assistantcore.dto.AIProfilePresetCreateRequest;
 import com.assistantcore.dto.AIProfilePresetResponse;
 import com.assistantcore.dto.AIProfileResponse;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -58,5 +60,13 @@ public class AIProfileController {
   @PostMapping("/channel-instances/{channelInstanceId}/assign/{profileId}")
   public AIProfileResponse assignToChannel(@PathVariable UUID channelInstanceId, @PathVariable UUID profileId) {
     return aiProfileService.assignProfileToChannel(channelInstanceId, profileId);
+  }
+
+  @PutMapping("/channel-instances/{channelInstanceId}/active")
+  public AIProfileResponse updateAssignedProfileActiveState(
+    @PathVariable UUID channelInstanceId,
+    @Valid @RequestBody AIProfileActiveUpdateRequest request
+  ) {
+    return aiProfileService.updateAssignedProfileActiveState(channelInstanceId, request.active());
   }
 }

@@ -137,6 +137,8 @@ public class AppUserService {
       membership.getRole(),
       channelInstance == null ? null : channelInstance.getId(),
       channelInstance == null ? null : channelInstance.getStatus(),
+      channelInstance == null || channelInstance.getAiProfile() == null ? null : channelInstance.getAiProfile().getId(),
+      channelInstance == null || channelInstance.getAiProfile() == null ? null : channelInstance.getAiProfile().isActive(),
       channelInstance == null ? null : channelInstance.getPhoneNumber(),
       channelInstance == null ? null : channelInstance.getInstanceName(),
       calendarConnection == null ? null : calendarConnection.getId(),
@@ -167,6 +169,6 @@ public class AppUserService {
   }
 
   private AppUserWorkspaceResponse emptyWorkspace() {
-    return new AppUserWorkspaceResponse(false, null, null, null, null, null, null, null, null, null, null, null, null);
+    return new AppUserWorkspaceResponse(false, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
   }
 }
