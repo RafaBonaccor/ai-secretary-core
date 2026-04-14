@@ -394,6 +394,8 @@ public class EvolutionMessageOrchestrator {
         - Se a conversa ja confirmou data, horario, duracao e tipo de atendimento, nao repita perguntas. Execute a criacao do agendamento.
         - Se voce acabou de resumir um agendamento e o cliente respondeu "confirmo", trate os campos resumidos como confirmados.
         - So confirme criacao, remarcacao ou cancelamento depois que a ferramenta retornar sucesso.
+        - Se a ferramenta retornar success=false com reason igual a time_slot_unavailable ou outside_working_hours, informe em portugues que o horario pedido nao esta disponivel e ofereca os suggestedSlots de forma objetiva.
+        - Quando houver conflito, nunca insista no mesmo horario como se estivesse livre.
         - Se faltar informacao essencial, pergunte ao cliente em vez de adivinhar.
         """
       );
@@ -687,6 +689,7 @@ public class EvolutionMessageOrchestrator {
     result.put("success", true);
     result.put("available", availability.available());
     result.put("reason", availability.reason());
+    result.put("message", availability.message());
     result.put("requestedStartDateTime", availability.requestedStartDateTime());
     result.put("requestedEndDateTime", availability.requestedEndDateTime());
     result.put("suggestedSlots", availability.suggestedSlots());
@@ -716,23 +719,36 @@ public class EvolutionMessageOrchestrator {
     CustomerSchedulingService.CustomerIdentity customerIdentity,
     Map<String, Object> arguments
   ) {
-    CustomerSchedulingService.CustomerBooking booking = customerSchedulingService.createCustomerBooking(
-      tenantId,
-      customerIdentity,
-      new CustomerSchedulingService.BookingRequest(
-        stringArgument(arguments, "appointmentType"),
-        requiredStringArgument(arguments, "startDateTime"),
-        stringArgument(arguments, "endDateTime"),
-        integerArgument(arguments, "durationMinutes"),
-        stringArgument(arguments, "notes")
-      )
-    );
+    try {
+      CustomerSchedulingService.CustomerBooking booking = customerSchedulingService.createCustomerBooking(
+        tenantId,
+        customerIdentity,
+        new CustomerSchedulingService.BookingRequest(
+          stringArgument(arguments, "appointmentType"),
+          requiredStringArgument(arguments, "startDateTime"),
+          stringArgument(arguments, "endDateTime"),
+          integerArgument(arguments, "durationMinutes"),
+          stringArgument(arguments, "notes")
+        )
+      );
 
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("success", true);
-    result.put("action", "created");
-    result.put("booking", booking);
-    return result;
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("success", true);
+      result.put("action", "created");
+      result.put("booking", booking);
+      return result;
+    } catch (CustomerSchedulingService.SlotUnavailableException exception) {
+      CustomerSchedulingService.AvailabilityResult availability = exception.availability();
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("success", false);
+      result.put("action", "create_conflict");
+      result.put("reason", availability.reason());
+      result.put("message", availability.message());
+      result.put("requestedStartDateTime", availability.requestedStartDateTime());
+      result.put("requestedEndDateTime", availability.requestedEndDateTime());
+      result.put("suggestedSlots", availability.suggestedSlots());
+      return result;
+    }
   }
 
   private Map<String, Object> buildRescheduleCustomerBookingResult(
@@ -740,24 +756,37 @@ public class EvolutionMessageOrchestrator {
     CustomerSchedulingService.CustomerIdentity customerIdentity,
     Map<String, Object> arguments
   ) {
-    CustomerSchedulingService.CustomerBooking booking = customerSchedulingService.rescheduleCustomerBooking(
-      tenantId,
-      customerIdentity,
-      new CustomerSchedulingService.RescheduleRequest(
-        requiredStringArgument(arguments, "eventId"),
-        stringArgument(arguments, "appointmentType"),
-        requiredStringArgument(arguments, "startDateTime"),
-        stringArgument(arguments, "endDateTime"),
-        integerArgument(arguments, "durationMinutes"),
-        stringArgument(arguments, "notes")
-      )
-    );
+    try {
+      CustomerSchedulingService.CustomerBooking booking = customerSchedulingService.rescheduleCustomerBooking(
+        tenantId,
+        customerIdentity,
+        new CustomerSchedulingService.RescheduleRequest(
+          requiredStringArgument(arguments, "eventId"),
+          stringArgument(arguments, "appointmentType"),
+          requiredStringArgument(arguments, "startDateTime"),
+          stringArgument(arguments, "endDateTime"),
+          integerArgument(arguments, "durationMinutes"),
+          stringArgument(arguments, "notes")
+        )
+      );
 
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("success", true);
-    result.put("action", "rescheduled");
-    result.put("booking", booking);
-    return result;
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("success", true);
+      result.put("action", "rescheduled");
+      result.put("booking", booking);
+      return result;
+    } catch (CustomerSchedulingService.SlotUnavailableException exception) {
+      CustomerSchedulingService.AvailabilityResult availability = exception.availability();
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("success", false);
+      result.put("action", "reschedule_conflict");
+      result.put("reason", availability.reason());
+      result.put("message", availability.message());
+      result.put("requestedStartDateTime", availability.requestedStartDateTime());
+      result.put("requestedEndDateTime", availability.requestedEndDateTime());
+      result.put("suggestedSlots", availability.suggestedSlots());
+      return result;
+    }
   }
 
   private Map<String, Object> buildCancelCustomerBookingResult(

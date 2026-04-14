@@ -84,7 +84,14 @@ public class CustomerSchedulingService {
         ? "outside_working_hours"
         : "time_slot_unavailable";
 
-    return new AvailabilityResult(available, reason, desiredStart.toString(), desiredEnd.toString(), suggestedSlots);
+    return new AvailabilityResult(
+      available,
+      reason,
+      availabilityMessage(reason, suggestedSlots),
+      desiredStart.toString(),
+      desiredEnd.toString(),
+      suggestedSlots
+    );
   }
 
   @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
@@ -229,12 +236,35 @@ public class CustomerSchedulingService {
     OffsetDateTime desiredEnd,
     String ignoredEventId
   ) {
-    if (!isWithinWorkingHours(connection, desiredStart, desiredEnd)) {
-      throw new IllegalArgumentException("Requested slot is outside configured working hours");
+    boolean withinWorkingHours = isWithinWorkingHours(connection, desiredStart, desiredEnd);
+    boolean conflicts = hasConflict(events, desiredStart, desiredEnd, ignoredEventId);
+    if (!withinWorkingHours || conflicts) {
+      String reason = !withinWorkingHours ? "outside_working_hours" : "time_slot_unavailable";
+      List<SuggestedSlot> suggestedSlots = suggestSlots(connection, events, desiredStart, (int) ChronoUnit.MINUTES.between(desiredStart, desiredEnd), 3, ignoredEventId);
+      AvailabilityResult availability = new AvailabilityResult(
+        false,
+        reason,
+        availabilityMessage(reason, suggestedSlots),
+        desiredStart.toString(),
+        desiredEnd.toString(),
+        suggestedSlots
+      );
+      throw new SlotUnavailableException(availability);
     }
-    if (hasConflict(events, desiredStart, desiredEnd, ignoredEventId)) {
-      throw new IllegalArgumentException("Requested slot conflicts with an existing booking");
+  }
+
+  private String availabilityMessage(String reason, List<SuggestedSlot> suggestedSlots) {
+    if ("available".equals(reason)) {
+      return "Esse horario esta disponivel.";
     }
+    if ("outside_working_hours".equals(reason)) {
+      return suggestedSlots == null || suggestedSlots.isEmpty()
+        ? "Esse horario esta fora do horario de atendimento."
+        : "Esse horario esta fora do horario de atendimento. Temos estas opcoes disponiveis:";
+    }
+    return suggestedSlots == null || suggestedSlots.isEmpty()
+      ? "Esse horario nao esta disponivel."
+      : "Esse horario nao esta disponivel. Temos estas opcoes disponiveis:";
   }
 
   private boolean isWithinWorkingHours(CalendarConnection connection, OffsetDateTime desiredStart, OffsetDateTime desiredEnd) {
@@ -523,6 +553,7 @@ public class CustomerSchedulingService {
   public record AvailabilityResult(
     boolean available,
     String reason,
+    String message,
     String requestedStartDateTime,
     String requestedEndDateTime,
     List<SuggestedSlot> suggestedSlots
@@ -554,4 +585,18 @@ public class CustomerSchedulingService {
     String endDateTime,
     String status
   ) {}
+
+  public static class SlotUnavailableException extends IllegalArgumentException {
+
+    private final AvailabilityResult availability;
+
+    public SlotUnavailableException(AvailabilityResult availability) {
+      super(availability == null ? "Requested slot is unavailable" : availability.message());
+      this.availability = availability;
+    }
+
+    public AvailabilityResult availability() {
+      return availability;
+    }
+  }
 }
