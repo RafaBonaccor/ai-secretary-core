@@ -19,10 +19,16 @@ public class TenantBusinessContextService {
 
   private final TenantRepository tenantRepository;
   private final ObjectMapper objectMapper;
+  private final PromptSafetyService promptSafetyService;
 
-  public TenantBusinessContextService(TenantRepository tenantRepository, ObjectMapper objectMapper) {
+  public TenantBusinessContextService(
+    TenantRepository tenantRepository,
+    ObjectMapper objectMapper,
+    PromptSafetyService promptSafetyService
+  ) {
     this.tenantRepository = tenantRepository;
     this.objectMapper = objectMapper;
+    this.promptSafetyService = promptSafetyService;
   }
 
   @Transactional(readOnly = true)
@@ -43,23 +49,24 @@ public class TenantBusinessContextService {
       tenant.setTimezone(request.timezone().trim());
     }
 
-    mergeField(context, "brandName", request.brandName());
-    mergeField(context, "businessType", request.businessType());
-    mergeField(context, "ownerName", request.ownerName());
-    mergeField(context, "city", request.city());
-    mergeField(context, "neighborhood", request.neighborhood());
-    mergeField(context, "address", request.address());
-    mergeField(context, "workingHours", request.workingHours());
-    mergeField(context, "services", request.services());
-    mergeField(context, "specialties", request.specialties());
-    mergeField(context, "targetAudience", request.targetAudience());
-    mergeField(context, "priceNotes", request.priceNotes());
-    mergeField(context, "bookingPolicy", request.bookingPolicy());
-    mergeField(context, "cancellationPolicy", request.cancellationPolicy());
-    mergeField(context, "toneOfVoice", request.toneOfVoice());
-    mergeField(context, "greetingStyle", request.greetingStyle());
-    mergeField(context, "instagramHandle", request.instagramHandle());
-    mergeField(context, "additionalContext", request.additionalContext());
+    mergeField(context, "brandName", request.brandName(), false);
+    mergeField(context, "businessType", request.businessType(), false);
+    mergeField(context, "ownerName", request.ownerName(), false);
+    mergeField(context, "city", request.city(), false);
+    mergeField(context, "neighborhood", request.neighborhood(), false);
+    mergeField(context, "address", request.address(), false);
+    mergeField(context, "workingHours", request.workingHours(), false);
+    mergeField(context, "services", request.services(), false);
+    mergeField(context, "specialties", request.specialties(), false);
+    mergeField(context, "targetAudience", request.targetAudience(), false);
+    mergeField(context, "priceNotes", request.priceNotes(), false);
+    mergeField(context, "bookingPolicy", request.bookingPolicy(), false);
+    mergeField(context, "cancellationPolicy", request.cancellationPolicy(), false);
+    mergeField(context, "toneOfVoice", request.toneOfVoice(), false);
+    mergeField(context, "greetingStyle", request.greetingStyle(), false);
+    mergeField(context, "assistantBehaviorPrompt", request.assistantBehaviorPrompt(), true);
+    mergeField(context, "instagramHandle", request.instagramHandle(), false);
+    mergeField(context, "additionalContext", request.additionalContext(), false);
 
     context.put("businessName", tenant.getName());
     context.put("timezone", tenant.getTimezone());
@@ -95,13 +102,15 @@ public class TenantBusinessContextService {
     }
   }
 
-  private void mergeField(Map<String, Object> context, String key, String value) {
+  private void mergeField(Map<String, Object> context, String key, String value, boolean strictPromptField) {
     if (value == null) {
       return;
     }
 
-    String normalized = value.trim();
-    if (normalized.isEmpty()) {
+    String normalized = strictPromptField
+      ? promptSafetyService.sanitizeAssistantBehaviorPrompt(value)
+      : promptSafetyService.sanitizeContextField(value);
+    if (normalized == null || normalized.isEmpty()) {
       context.remove(key);
       return;
     }
@@ -137,6 +146,7 @@ public class TenantBusinessContextService {
       contextValue(context, "cancellationPolicy"),
       contextValue(context, "toneOfVoice"),
       contextValue(context, "greetingStyle"),
+      contextValue(context, "assistantBehaviorPrompt"),
       contextValue(context, "instagramHandle"),
       contextValue(context, "additionalContext"),
       tenant.getTimezone()

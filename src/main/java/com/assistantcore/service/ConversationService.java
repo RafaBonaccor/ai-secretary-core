@@ -86,6 +86,8 @@ public class ConversationService {
     conversation.setStatus("open");
     conversation.setLastMessageAt(sentAt);
     conversation.setLastInboundText(body);
+    conversation.setLastMessagePreview(body);
+    conversation.setLastMessageDirection("inbound");
     conversation.setUpdatedAt(now);
     conversation = conversationRepository.save(conversation);
 
@@ -118,6 +120,8 @@ public class ConversationService {
     Instant now = Instant.now();
 
     conversation.setLastMessageAt(now);
+    conversation.setLastMessagePreview(body);
+    conversation.setLastMessageDirection("outbound");
     conversation.setUpdatedAt(now);
     conversationRepository.save(conversation);
 

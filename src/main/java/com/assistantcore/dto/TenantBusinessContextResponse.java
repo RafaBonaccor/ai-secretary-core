@@ -20,6 +20,7 @@ public record TenantBusinessContextResponse(
   String cancellationPolicy,
   String toneOfVoice,
   String greetingStyle,
+  String assistantBehaviorPrompt,
   String instagramHandle,
   String additionalContext,
   String timezone

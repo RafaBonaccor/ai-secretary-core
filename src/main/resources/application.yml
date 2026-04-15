@@ -8,10 +8,15 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: assistant_core
     open-in-view: false
   flyway:
     enabled: true
     locations: classpath:db/migration
+    default-schema: assistant_core
+    schemas: assistant_core
 
 server:
   port: ${SERVER_PORT:8090}
