@@ -4,6 +4,7 @@ import com.assistantcore.dto.AppUserResponse;
 import com.assistantcore.dto.AppUserSyncRequest;
 import com.assistantcore.dto.AppUserWorkspaceResponse;
 import com.assistantcore.dto.TenantMembershipResponse;
+import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.AppUserService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -19,23 +20,28 @@ import org.springframework.web.bind.annotation.RestController;
 public class AppUserController {
 
   private final AppUserService appUserService;
+  private final AppAuthorizationService appAuthorizationService;
 
-  public AppUserController(AppUserService appUserService) {
+  public AppUserController(AppUserService appUserService, AppAuthorizationService appAuthorizationService) {
     this.appUserService = appUserService;
+    this.appAuthorizationService = appAuthorizationService;
   }
 
   @PostMapping("/sync")
   public AppUserResponse sync(@Valid @RequestBody AppUserSyncRequest request) {
+    appAuthorizationService.requireSameSupabaseUser(request.supabaseUserId());
     return appUserService.sync(request);
   }
 
   @GetMapping("/{supabaseUserId}/memberships")
   public List<TenantMembershipResponse> listMemberships(@PathVariable String supabaseUserId) {
+    appAuthorizationService.requireSameSupabaseUser(supabaseUserId);
     return appUserService.listMemberships(supabaseUserId);
   }
 
   @GetMapping("/{supabaseUserId}/workspace")
   public AppUserWorkspaceResponse workspace(@PathVariable String supabaseUserId) {
+    appAuthorizationService.requireSameSupabaseUser(supabaseUserId);
     return appUserService.loadWorkspace(supabaseUserId);
   }
 }

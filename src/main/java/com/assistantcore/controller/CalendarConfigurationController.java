@@ -4,6 +4,7 @@ import com.assistantcore.dto.AppointmentTypesUpsertRequest;
 import com.assistantcore.dto.CalendarConnectionCreateRequest;
 import com.assistantcore.dto.CalendarConnectionResponse;
 import com.assistantcore.dto.WorkingHoursUpsertRequest;
+import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.CalendarConfigurationService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -23,29 +24,38 @@ import org.springframework.web.bind.annotation.RestController;
 public class CalendarConfigurationController {
 
   private final CalendarConfigurationService calendarConfigurationService;
+  private final AppAuthorizationService appAuthorizationService;
 
-  public CalendarConfigurationController(CalendarConfigurationService calendarConfigurationService) {
+  public CalendarConfigurationController(
+    CalendarConfigurationService calendarConfigurationService,
+    AppAuthorizationService appAuthorizationService
+  ) {
     this.calendarConfigurationService = calendarConfigurationService;
+    this.appAuthorizationService = appAuthorizationService;
   }
 
   @GetMapping("/tenant/{tenantId}")
   public List<CalendarConnectionResponse> listByTenant(@PathVariable UUID tenantId) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return calendarConfigurationService.listByTenant(tenantId);
   }
 
   @PostMapping("/tenant/{tenantId}/google/manual")
   @ResponseStatus(HttpStatus.CREATED)
   public CalendarConnectionResponse createGoogleConnection(@PathVariable UUID tenantId, @Valid @RequestBody CalendarConnectionCreateRequest request) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return calendarConfigurationService.createGoogleConnection(tenantId, request);
   }
 
   @PutMapping("/{connectionId}/working-hours")
   public CalendarConnectionResponse replaceWorkingHours(@PathVariable UUID connectionId, @Valid @RequestBody WorkingHoursUpsertRequest request) {
+    appAuthorizationService.requireCalendarConnectionAccess(connectionId);
     return calendarConfigurationService.replaceWorkingHours(connectionId, request);
   }
 
   @PutMapping("/{connectionId}/appointment-types")
   public CalendarConnectionResponse replaceAppointmentTypes(@PathVariable UUID connectionId, @Valid @RequestBody AppointmentTypesUpsertRequest request) {
+    appAuthorizationService.requireCalendarConnectionAccess(connectionId);
     return calendarConfigurationService.replaceAppointmentTypes(connectionId, request);
   }
 }

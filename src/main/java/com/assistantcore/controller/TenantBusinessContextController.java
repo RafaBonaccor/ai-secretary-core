@@ -2,6 +2,7 @@ package com.assistantcore.controller;
 
 import com.assistantcore.dto.TenantBusinessContextResponse;
 import com.assistantcore.dto.TenantBusinessContextUpdateRequest;
+import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.TenantBusinessContextService;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,13 +17,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class TenantBusinessContextController {
 
   private final TenantBusinessContextService tenantBusinessContextService;
+  private final AppAuthorizationService appAuthorizationService;
 
-  public TenantBusinessContextController(TenantBusinessContextService tenantBusinessContextService) {
+  public TenantBusinessContextController(
+    TenantBusinessContextService tenantBusinessContextService,
+    AppAuthorizationService appAuthorizationService
+  ) {
     this.tenantBusinessContextService = tenantBusinessContextService;
+    this.appAuthorizationService = appAuthorizationService;
   }
 
   @GetMapping("/{tenantId}/business-context")
   public TenantBusinessContextResponse getBusinessContext(@PathVariable UUID tenantId) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return tenantBusinessContextService.getBusinessContext(tenantId);
   }
 
@@ -31,6 +38,7 @@ public class TenantBusinessContextController {
     @PathVariable UUID tenantId,
     @RequestBody TenantBusinessContextUpdateRequest request
   ) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return tenantBusinessContextService.updateBusinessContext(tenantId, request);
   }
 }

@@ -44,7 +44,6 @@ public class SecurityConfig {
           "/actuator/health",
           "/api/v1/health",
           "/api/v1/webhooks/**",
-          "/api/v1/onboarding/mock",
           "/api/v1/oauth/google/calendar/callback"
         ).permitAll()
         .anyRequest().authenticated()

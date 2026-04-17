@@ -5,6 +5,7 @@ import com.assistantcore.dto.InboxMessageResponse;
 import com.assistantcore.dto.InboxSendMessageRequest;
 import com.assistantcore.dto.ScheduledConversationActionRequest;
 import com.assistantcore.dto.ScheduledConversationActionResponse;
+import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.InboxService;
 import java.util.List;
 import java.util.UUID;
@@ -24,18 +25,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class InboxController {
 
   private final InboxService inboxService;
+  private final AppAuthorizationService appAuthorizationService;
 
-  public InboxController(InboxService inboxService) {
+  public InboxController(InboxService inboxService, AppAuthorizationService appAuthorizationService) {
     this.inboxService = inboxService;
+    this.appAuthorizationService = appAuthorizationService;
   }
 
   @GetMapping("/conversations")
   public List<InboxConversationResponse> listConversations(@PathVariable UUID tenantId) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.listConversations(tenantId);
   }
 
   @GetMapping("/conversations/{conversationId}/messages")
   public List<InboxMessageResponse> listMessages(@PathVariable UUID tenantId, @PathVariable UUID conversationId) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.listMessages(tenantId, conversationId);
   }
 
@@ -46,6 +51,7 @@ public class InboxController {
     @PathVariable UUID conversationId,
     @RequestBody InboxSendMessageRequest request
   ) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.sendManualMessage(tenantId, conversationId, request);
   }
 
@@ -54,6 +60,7 @@ public class InboxController {
     @PathVariable UUID tenantId,
     @RequestParam(required = false) UUID conversationId
   ) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.listScheduledActions(tenantId, conversationId);
   }
 
@@ -64,11 +71,13 @@ public class InboxController {
     @PathVariable UUID conversationId,
     @RequestBody ScheduledConversationActionRequest request
   ) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.scheduleAction(tenantId, conversationId, request);
   }
 
   @DeleteMapping("/scheduled-actions/{actionId}")
   public ScheduledConversationActionResponse cancelAction(@PathVariable UUID tenantId, @PathVariable UUID actionId) {
+    appAuthorizationService.requireTenantMembership(tenantId);
     return inboxService.cancelScheduledAction(tenantId, actionId);
   }
 }
