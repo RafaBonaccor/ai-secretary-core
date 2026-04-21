@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface GoogleCalendarCredentialRepository extends JpaRepository<GoogleCalendarCredential, UUID> {
   Optional<GoogleCalendarCredential> findByCalendarConnectionId(UUID calendarConnectionId);
+
+  void deleteByCalendarConnectionId(UUID calendarConnectionId);
 }

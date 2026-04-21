@@ -318,6 +318,29 @@ public class GoogleCalendarClient {
       .toBodilessEntity();
   }
 
+  public void revokeToken(String token) {
+    if (!hasText(token)) {
+      return;
+    }
+
+    MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+    form.add("token", token.trim());
+
+    try {
+      restClient
+        .post()
+        .uri("https://oauth2.googleapis.com/revoke")
+        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+        .body(form)
+        .retrieve()
+        .toBodilessEntity();
+    } catch (HttpClientErrorException exception) {
+      log.warn("Google OAuth token revoke returned {}: {}", exception.getStatusCode(), exception.getResponseBodyAsString());
+    } catch (Exception exception) {
+      log.warn("Google OAuth token revoke failed: {}", exception.getMessage());
+    }
+  }
+
   public String redirectUri() {
     return redirectUri;
   }

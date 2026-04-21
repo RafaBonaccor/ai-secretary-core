@@ -60,14 +60,18 @@ public class GoogleCalendarCredentialService {
 
   @Transactional(readOnly = true)
   public CredentialMaterial requireMaterial(UUID connectionId) {
-    GoogleCalendarCredential credential = googleCalendarCredentialRepository.findByCalendarConnectionId(connectionId)
+    return findMaterial(connectionId)
       .orElseThrow(() -> new EntityNotFoundException("Google OAuth credential not found for calendar connection: " + connectionId));
+  }
 
-    return new CredentialMaterial(
-      googleOAuthTokenCipher.decrypt(credential.getEncryptedAccessToken()),
-      googleOAuthTokenCipher.decrypt(credential.getEncryptedRefreshToken()),
-      credential.getTokenExpiresAt()
-    );
+  @Transactional(readOnly = true)
+  public Optional<CredentialMaterial> findMaterial(UUID connectionId) {
+    return googleCalendarCredentialRepository.findByCalendarConnectionId(connectionId)
+      .map(credential -> new CredentialMaterial(
+        googleOAuthTokenCipher.decrypt(credential.getEncryptedAccessToken()),
+        googleOAuthTokenCipher.decrypt(credential.getEncryptedRefreshToken()),
+        credential.getTokenExpiresAt()
+      ));
   }
 
   @Transactional
@@ -82,6 +86,11 @@ public class GoogleCalendarCredentialService {
     credential.setTokenExpiresAt(tokenExpiresAt);
     credential.setUpdatedAt(Instant.now());
     googleCalendarCredentialRepository.save(credential);
+  }
+
+  @Transactional
+  public void deleteByConnectionId(UUID connectionId) {
+    googleCalendarCredentialRepository.deleteByCalendarConnectionId(connectionId);
   }
 
   public record CredentialMaterial(String accessToken, String refreshToken, Instant expiresAt) {}

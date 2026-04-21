@@ -45,19 +45,25 @@ public class CalendarConfigurationService {
   private final AppointmentTypeRepository appointmentTypeRepository;
   private final TenantRepository tenantRepository;
   private final OfficialEmailPolicyService officialEmailPolicyService;
+  private final GoogleCalendarCredentialService googleCalendarCredentialService;
+  private final GoogleCalendarClient googleCalendarClient;
 
   public CalendarConfigurationService(
     CalendarConnectionRepository calendarConnectionRepository,
     WorkingHourRepository workingHourRepository,
     AppointmentTypeRepository appointmentTypeRepository,
     TenantRepository tenantRepository,
-    OfficialEmailPolicyService officialEmailPolicyService
+    OfficialEmailPolicyService officialEmailPolicyService,
+    GoogleCalendarCredentialService googleCalendarCredentialService,
+    GoogleCalendarClient googleCalendarClient
   ) {
     this.calendarConnectionRepository = calendarConnectionRepository;
     this.workingHourRepository = workingHourRepository;
     this.appointmentTypeRepository = appointmentTypeRepository;
     this.tenantRepository = tenantRepository;
     this.officialEmailPolicyService = officialEmailPolicyService;
+    this.googleCalendarCredentialService = googleCalendarCredentialService;
+    this.googleCalendarClient = googleCalendarClient;
   }
 
   @Transactional(readOnly = true)
@@ -149,6 +155,21 @@ public class CalendarConfigurationService {
     appointmentTypeRepository.saveAll(items);
     touch(connection);
     return toResponse(connection);
+  }
+
+  @Transactional
+  public CalendarConnectionResponse disconnectGoogle(UUID connectionId) {
+    CalendarConnection connection = getConnection(connectionId);
+
+    googleCalendarCredentialService.findMaterial(connectionId).ifPresent(material -> {
+      String revokeCandidate = hasText(material.refreshToken()) ? material.refreshToken() : material.accessToken();
+      googleCalendarClient.revokeToken(revokeCandidate);
+    });
+    googleCalendarCredentialService.deleteByConnectionId(connectionId);
+
+    connection.setStatus("disconnected");
+    connection.setUpdatedAt(Instant.now());
+    return toResponse(calendarConnectionRepository.save(connection));
   }
 
   @Transactional(readOnly = true)
