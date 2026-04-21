@@ -17,5 +17,6 @@ public record AppUserWorkspaceResponse(
   UUID calendarConnectionId,
   String calendarConnectionStatus,
   String googleAccountEmail,
-  String googleCalendarName
+  String googleCalendarName,
+  TenantSubscriptionResponse subscription
 ) {}

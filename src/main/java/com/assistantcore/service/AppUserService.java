@@ -3,6 +3,7 @@ package com.assistantcore.service;
 import com.assistantcore.dto.AppUserResponse;
 import com.assistantcore.dto.AppUserSyncRequest;
 import com.assistantcore.dto.AppUserWorkspaceResponse;
+import com.assistantcore.dto.TenantSubscriptionResponse;
 import com.assistantcore.dto.TenantMembershipResponse;
 import com.assistantcore.model.AppUser;
 import com.assistantcore.model.CalendarConnection;
@@ -29,26 +30,32 @@ public class AppUserService {
   private final TenantUserMembershipRepository tenantUserMembershipRepository;
   private final ChannelInstanceRepository channelInstanceRepository;
   private final CalendarConnectionRepository calendarConnectionRepository;
+  private final SubscriptionEntitlementService subscriptionEntitlementService;
+  private final OfficialEmailPolicyService officialEmailPolicyService;
 
   public AppUserService(
     AppUserRepository appUserRepository,
     TenantRepository tenantRepository,
     TenantUserMembershipRepository tenantUserMembershipRepository,
     ChannelInstanceRepository channelInstanceRepository,
-    CalendarConnectionRepository calendarConnectionRepository
+    CalendarConnectionRepository calendarConnectionRepository,
+    SubscriptionEntitlementService subscriptionEntitlementService,
+    OfficialEmailPolicyService officialEmailPolicyService
   ) {
     this.appUserRepository = appUserRepository;
     this.tenantRepository = tenantRepository;
     this.tenantUserMembershipRepository = tenantUserMembershipRepository;
     this.channelInstanceRepository = channelInstanceRepository;
     this.calendarConnectionRepository = calendarConnectionRepository;
+    this.subscriptionEntitlementService = subscriptionEntitlementService;
+    this.officialEmailPolicyService = officialEmailPolicyService;
   }
 
   @Transactional
   public AppUserResponse sync(AppUserSyncRequest request) {
     Instant now = Instant.now();
     String supabaseUserId = request.supabaseUserId().trim();
-    String email = request.email().trim().toLowerCase();
+    String email = officialEmailPolicyService.requireOfficialEmail(request.email());
     String fullName = request.fullName() == null || request.fullName().isBlank() ? null : request.fullName().trim();
 
     AppUser appUser = appUserRepository.findBySupabaseUserId(supabaseUserId).orElseGet(() -> {
@@ -86,7 +93,8 @@ public class AppUserService {
       return;
     }
 
-    AppUserResponse response = sync(new AppUserSyncRequest(supabaseUserId, email, fullName));
+    String normalizedEmail = officialEmailPolicyService.requireOfficialEmail(email);
+    AppUserResponse response = sync(new AppUserSyncRequest(supabaseUserId, normalizedEmail, fullName));
     AppUser appUser = appUserRepository.findById(response.id())
       .orElseThrow(() -> new IllegalStateException("Failed to reload synced app user"));
     Tenant tenant = tenantRepository.findById(tenantId)
@@ -143,6 +151,7 @@ public class AppUserService {
     CalendarConnection calendarConnection = calendarConnectionRepository.findByTenantIdOrderByCreatedAtDesc(tenant.getId()).stream()
       .findFirst()
       .orElse(null);
+    TenantSubscriptionResponse subscription = subscriptionEntitlementService.getTenantSubscription(tenant.getId());
 
     return new AppUserWorkspaceResponse(
       true,
@@ -159,7 +168,8 @@ public class AppUserService {
       calendarConnection == null ? null : calendarConnection.getId(),
       calendarConnection == null ? null : calendarConnection.getStatus(),
       calendarConnection == null ? null : calendarConnection.getGoogleAccountEmail(),
-      calendarConnection == null ? null : calendarConnection.getGoogleCalendarName()
+      calendarConnection == null ? null : calendarConnection.getGoogleCalendarName(),
+      subscription
     );
   }
 
@@ -184,6 +194,6 @@ public class AppUserService {
   }
 
   private AppUserWorkspaceResponse emptyWorkspace() {
-    return new AppUserWorkspaceResponse(false, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+    return new AppUserWorkspaceResponse(false, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
   }
 }

@@ -20,15 +20,18 @@ public class TenantBusinessContextService {
   private final TenantRepository tenantRepository;
   private final ObjectMapper objectMapper;
   private final PromptSafetyService promptSafetyService;
+  private final SubscriptionEntitlementService subscriptionEntitlementService;
 
   public TenantBusinessContextService(
     TenantRepository tenantRepository,
     ObjectMapper objectMapper,
-    PromptSafetyService promptSafetyService
+    PromptSafetyService promptSafetyService,
+    SubscriptionEntitlementService subscriptionEntitlementService
   ) {
     this.tenantRepository = tenantRepository;
     this.objectMapper = objectMapper;
     this.promptSafetyService = promptSafetyService;
+    this.subscriptionEntitlementService = subscriptionEntitlementService;
   }
 
   @Transactional(readOnly = true)
@@ -42,11 +45,17 @@ public class TenantBusinessContextService {
     Tenant tenant = getTenant(tenantId);
     Map<String, Object> context = readContext(tenant.getBusinessContextJson());
 
-    if (hasText(request.businessName())) {
-      tenant.setName(request.businessName().trim());
+    if (request.assistantBehaviorPrompt() != null) {
+      subscriptionEntitlementService.requireCustomPromptFeatureForTenant(tenantId);
     }
-    if (hasText(request.timezone())) {
-      tenant.setTimezone(request.timezone().trim());
+
+    String sanitizedBusinessName = sanitizeOptionalField("businessName", request.businessName());
+    if (sanitizedBusinessName != null) {
+      tenant.setName(sanitizedBusinessName);
+    }
+    String sanitizedTimezone = sanitizeOptionalField("timezone", request.timezone());
+    if (sanitizedTimezone != null) {
+      tenant.setTimezone(sanitizedTimezone);
     }
 
     mergeField(context, "brandName", request.brandName(), false);
@@ -70,6 +79,7 @@ public class TenantBusinessContextService {
 
     context.put("businessName", tenant.getName());
     context.put("timezone", tenant.getTimezone());
+    promptSafetyService.validateBusinessContextBudget(context);
 
     tenant.setBusinessContextJson(writeContext(context));
     tenant.setUpdatedAt(Instant.now());
@@ -109,13 +119,21 @@ public class TenantBusinessContextService {
 
     String normalized = strictPromptField
       ? promptSafetyService.sanitizeAssistantBehaviorPrompt(value)
-      : promptSafetyService.sanitizeContextField(value);
+      : promptSafetyService.sanitizeContextField(key, value);
     if (normalized == null || normalized.isEmpty()) {
       context.remove(key);
       return;
     }
 
     context.put(key, normalized);
+  }
+
+  private String sanitizeOptionalField(String key, String value) {
+    if (!hasText(value)) {
+      return null;
+    }
+
+    return promptSafetyService.sanitizeContextField(key, value);
   }
 
   private boolean hasText(String value) {

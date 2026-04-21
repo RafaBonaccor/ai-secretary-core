@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class MockOnboardingService {
@@ -35,6 +37,7 @@ public class MockOnboardingService {
   private final AIProfileService aiProfileService;
   private final AppUserService appUserService;
   private final ObjectMapper objectMapper;
+  private final PromptSafetyService promptSafetyService;
 
   public MockOnboardingService(
     TenantRepository tenantRepository,
@@ -44,7 +47,8 @@ public class MockOnboardingService {
     EvolutionInstanceClient evolutionInstanceClient,
     AIProfileService aiProfileService,
     AppUserService appUserService,
-    ObjectMapper objectMapper
+    ObjectMapper objectMapper,
+    PromptSafetyService promptSafetyService
   ) {
     this.tenantRepository = tenantRepository;
     this.planRepository = planRepository;
@@ -54,14 +58,20 @@ public class MockOnboardingService {
     this.aiProfileService = aiProfileService;
     this.appUserService = appUserService;
     this.objectMapper = objectMapper;
+    this.promptSafetyService = promptSafetyService;
   }
 
   @Transactional
   public MockOnboardingResponse create(MockOnboardingRequest request) {
-    String normalizedPhoneNumber = request.phoneNumber().replaceAll("\\D", "");
-    String planCode = request.planCode() == null || request.planCode().isBlank() ? "starter" : request.planCode().trim().toLowerCase(Locale.ROOT);
-    String timezone = request.timezone() == null || request.timezone().isBlank() ? "Europe/Rome" : request.timezone().trim();
-    String slugBase = slugify(request.businessName());
+    String sanitizedBusinessName = sanitizeRequiredContextField("businessName", request.businessName());
+    String normalizedPhoneNumber = request.phoneNumber() == null ? "" : request.phoneNumber().replaceAll("\\D", "");
+    // New tenants must always start on the free plan. Paid plans are assigned only after Stripe confirmation.
+    String planCode = "trial";
+    String timezone = sanitizeOptionalContextField("timezone", request.timezone());
+    if (timezone == null) {
+      timezone = "Europe/Rome";
+    }
+    String slugBase = slugify(sanitizedBusinessName);
     String slug = ensureUniqueSlug(slugBase);
     boolean autoCreateInstance = request.autoCreateInstance() == null || request.autoCreateInstance();
     boolean autoConnect = request.autoConnect() != null && request.autoConnect();
@@ -69,7 +79,7 @@ public class MockOnboardingService {
 
     Tenant tenant = new Tenant();
     tenant.setId(UUID.randomUUID());
-    tenant.setName(request.businessName().trim());
+    tenant.setName(sanitizedBusinessName);
     tenant.setSlug(slug);
     tenant.setStatus("active");
     tenant.setTimezone(timezone);
@@ -130,6 +140,9 @@ public class MockOnboardingService {
     }
 
     if (autoConnect) {
+      if (normalizedPhoneNumber.isBlank()) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "phoneNumber is required when autoConnect is enabled");
+      }
       evolutionInstanceClient.connectInstance(channelInstance.getInstanceName(), normalizedPhoneNumber);
       evolutionConnectRequested = true;
       channelInstance.setStatus("connection_requested");
@@ -160,11 +173,7 @@ public class MockOnboardingService {
     Plan plan = new Plan();
     plan.setId(UUID.randomUUID());
     plan.setCode(code);
-    plan.setName(capitalize(code));
-    plan.setPriceMonthly(BigDecimal.ZERO);
-    plan.setMessageLimit(1000);
-    plan.setAudioLimit(100);
-    plan.setAutomationLimit(10);
+    applyPlanDefaults(plan, code);
     plan.setCreatedAt(now);
     plan.setUpdatedAt(now);
     return planRepository.save(plan);
@@ -190,27 +199,120 @@ public class MockOnboardingService {
     return value.substring(0, 1).toUpperCase(Locale.ROOT) + value.substring(1);
   }
 
+  private void applyPlanDefaults(Plan plan, String rawCode) {
+    String code = rawCode == null ? "trial" : rawCode.trim().toLowerCase(Locale.ROOT);
+
+    switch (code) {
+      case "trial" -> {
+        plan.setName("Free");
+        plan.setPriceMonthly(BigDecimal.ZERO);
+        plan.setMessageLimit(500);
+        plan.setAudioLimit(0);
+        plan.setAutomationLimit(0);
+        plan.setMaxWhatsappNumbers(1);
+        plan.setMaxAiProfiles(1);
+        plan.setMaxTeamMembers(1);
+        plan.setCalendarEnabled(false);
+        plan.setInboxEnabled(true);
+        plan.setCustomPromptEnabled(true);
+        plan.setAdvancedAutomationEnabled(false);
+        plan.setRealtimeVoiceEnabled(false);
+        plan.setFutureFeaturesEnabled(false);
+        plan.setPrioritySupportEnabled(false);
+      }
+      case "starter" -> {
+        plan.setName("Starter");
+        plan.setPriceMonthly(new BigDecimal("49.00"));
+        plan.setMessageLimit(2000);
+        plan.setAudioLimit(0);
+        plan.setAutomationLimit(1);
+        plan.setMaxWhatsappNumbers(1);
+        plan.setMaxAiProfiles(1);
+        plan.setMaxTeamMembers(1);
+        plan.setCalendarEnabled(true);
+        plan.setInboxEnabled(true);
+        plan.setCustomPromptEnabled(true);
+        plan.setAdvancedAutomationEnabled(false);
+        plan.setRealtimeVoiceEnabled(false);
+        plan.setFutureFeaturesEnabled(false);
+        plan.setPrioritySupportEnabled(false);
+      }
+      case "pro" -> {
+        plan.setName("Pro");
+        plan.setPriceMonthly(new BigDecimal("99.00"));
+        plan.setMessageLimit(8000);
+        plan.setAudioLimit(200);
+        plan.setAutomationLimit(5);
+        plan.setMaxWhatsappNumbers(2);
+        plan.setMaxAiProfiles(3);
+        plan.setMaxTeamMembers(3);
+        plan.setCalendarEnabled(true);
+        plan.setInboxEnabled(true);
+        plan.setCustomPromptEnabled(true);
+        plan.setAdvancedAutomationEnabled(false);
+        plan.setRealtimeVoiceEnabled(false);
+        plan.setFutureFeaturesEnabled(false);
+        plan.setPrioritySupportEnabled(false);
+      }
+      case "scale" -> {
+        plan.setName("Scale");
+        plan.setPriceMonthly(new BigDecimal("199.00"));
+        plan.setMessageLimit(25000);
+        plan.setAudioLimit(1000);
+        plan.setAutomationLimit(50);
+        plan.setMaxWhatsappNumbers(10);
+        plan.setMaxAiProfiles(20);
+        plan.setMaxTeamMembers(10);
+        plan.setCalendarEnabled(true);
+        plan.setInboxEnabled(true);
+        plan.setCustomPromptEnabled(true);
+        plan.setAdvancedAutomationEnabled(true);
+        plan.setRealtimeVoiceEnabled(true);
+        plan.setFutureFeaturesEnabled(true);
+        plan.setPrioritySupportEnabled(true);
+      }
+      default -> {
+        plan.setName(capitalize(code));
+        plan.setPriceMonthly(new BigDecimal("49.00"));
+        plan.setMessageLimit(2000);
+        plan.setAudioLimit(0);
+        plan.setAutomationLimit(1);
+        plan.setMaxWhatsappNumbers(1);
+        plan.setMaxAiProfiles(1);
+        plan.setMaxTeamMembers(1);
+        plan.setCalendarEnabled(false);
+        plan.setInboxEnabled(true);
+        plan.setCustomPromptEnabled(true);
+        plan.setAdvancedAutomationEnabled(false);
+        plan.setRealtimeVoiceEnabled(false);
+        plan.setFutureFeaturesEnabled(false);
+        plan.setPrioritySupportEnabled(false);
+      }
+    }
+  }
+
   private String buildBusinessContextJson(MockOnboardingRequest request, String timezone) {
     Map<String, Object> context = new LinkedHashMap<>();
-    putIfHasText(context, "businessName", request.businessName());
-    putIfHasText(context, "brandName", request.brandName());
-    putIfHasText(context, "businessType", request.businessType());
-    putIfHasText(context, "ownerName", request.ownerName());
-    putIfHasText(context, "city", request.city());
-    putIfHasText(context, "neighborhood", request.neighborhood());
-    putIfHasText(context, "address", request.address());
-    putIfHasText(context, "workingHours", request.workingHours());
-    putIfHasText(context, "services", request.services());
-    putIfHasText(context, "specialties", request.specialties());
-    putIfHasText(context, "targetAudience", request.targetAudience());
-    putIfHasText(context, "priceNotes", request.priceNotes());
-    putIfHasText(context, "bookingPolicy", request.bookingPolicy());
-    putIfHasText(context, "cancellationPolicy", request.cancellationPolicy());
-    putIfHasText(context, "toneOfVoice", request.toneOfVoice());
-    putIfHasText(context, "greetingStyle", request.greetingStyle());
-    putIfHasText(context, "instagramHandle", request.instagramHandle());
-    putIfHasText(context, "additionalContext", request.additionalContext());
+    putIfHasText(context, "businessName", sanitizeRequiredContextField("businessName", request.businessName()));
+    putIfHasText(context, "brandName", sanitizeOptionalContextField("brandName", request.brandName()));
+    putIfHasText(context, "businessType", sanitizeOptionalContextField("businessType", request.businessType()));
+    putIfHasText(context, "ownerName", sanitizeOptionalContextField("ownerName", request.ownerName()));
+    putIfHasText(context, "city", sanitizeOptionalContextField("city", request.city()));
+    putIfHasText(context, "neighborhood", sanitizeOptionalContextField("neighborhood", request.neighborhood()));
+    putIfHasText(context, "address", sanitizeOptionalContextField("address", request.address()));
+    putIfHasText(context, "workingHours", sanitizeOptionalContextField("workingHours", request.workingHours()));
+    putIfHasText(context, "services", sanitizeOptionalContextField("services", request.services()));
+    putIfHasText(context, "specialties", sanitizeOptionalContextField("specialties", request.specialties()));
+    putIfHasText(context, "targetAudience", sanitizeOptionalContextField("targetAudience", request.targetAudience()));
+    putIfHasText(context, "priceNotes", sanitizeOptionalContextField("priceNotes", request.priceNotes()));
+    putIfHasText(context, "bookingPolicy", sanitizeOptionalContextField("bookingPolicy", request.bookingPolicy()));
+    putIfHasText(context, "cancellationPolicy", sanitizeOptionalContextField("cancellationPolicy", request.cancellationPolicy()));
+    putIfHasText(context, "toneOfVoice", sanitizeOptionalContextField("toneOfVoice", request.toneOfVoice()));
+    putIfHasText(context, "greetingStyle", sanitizeOptionalContextField("greetingStyle", request.greetingStyle()));
+    putIfHasText(context, "instagramHandle", sanitizeOptionalContextField("instagramHandle", request.instagramHandle()));
+    putIfHasText(context, "additionalContext", sanitizeOptionalContextField("additionalContext", request.additionalContext()));
     context.put("timezone", timezone);
+    promptSafetyService.validateBusinessContextBudget(context);
 
     try {
       return objectMapper.writeValueAsString(context);
@@ -223,5 +325,22 @@ public class MockOnboardingService {
     if (value != null && !value.isBlank()) {
       target.put(key, value.trim());
     }
+  }
+
+  private String sanitizeOptionalContextField(String fieldKey, String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+
+    return promptSafetyService.sanitizeContextField(fieldKey, value);
+  }
+
+  private String sanitizeRequiredContextField(String fieldKey, String value) {
+    String sanitized = sanitizeOptionalContextField(fieldKey, value);
+    if (sanitized == null || sanitized.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldKey + " is required");
+    }
+
+    return sanitized;
   }
 }

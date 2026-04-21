@@ -44,17 +44,20 @@ public class CalendarConfigurationService {
   private final WorkingHourRepository workingHourRepository;
   private final AppointmentTypeRepository appointmentTypeRepository;
   private final TenantRepository tenantRepository;
+  private final OfficialEmailPolicyService officialEmailPolicyService;
 
   public CalendarConfigurationService(
     CalendarConnectionRepository calendarConnectionRepository,
     WorkingHourRepository workingHourRepository,
     AppointmentTypeRepository appointmentTypeRepository,
-    TenantRepository tenantRepository
+    TenantRepository tenantRepository,
+    OfficialEmailPolicyService officialEmailPolicyService
   ) {
     this.calendarConnectionRepository = calendarConnectionRepository;
     this.workingHourRepository = workingHourRepository;
     this.appointmentTypeRepository = appointmentTypeRepository;
     this.tenantRepository = tenantRepository;
+    this.officialEmailPolicyService = officialEmailPolicyService;
   }
 
   @Transactional(readOnly = true)
@@ -71,7 +74,7 @@ public class CalendarConfigurationService {
     connection.setId(UUID.randomUUID());
     connection.setTenant(tenant);
     connection.setProvider("google_calendar");
-    connection.setGoogleAccountEmail(request.googleAccountEmail().trim());
+    connection.setGoogleAccountEmail(officialEmailPolicyService.requireOfficialEmail(request.googleAccountEmail()));
     connection.setGoogleCalendarId(request.googleCalendarId().trim());
     connection.setGoogleCalendarName(request.googleCalendarName().trim());
     connection.setStatus("pending_oauth");

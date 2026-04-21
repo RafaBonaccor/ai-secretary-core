@@ -31,6 +31,12 @@ public class Subscription {
   @Column(name = "provider_subscription_id")
   private String providerSubscriptionId;
 
+  @Column(name = "provider_customer_id")
+  private String providerCustomerId;
+
+  @Column(name = "provider_price_id")
+  private String providerPriceId;
+
   @Column(nullable = false)
   private String status;
 
@@ -56,6 +62,10 @@ public class Subscription {
   public void setProvider(String provider) { this.provider = provider; }
   public String getProviderSubscriptionId() { return providerSubscriptionId; }
   public void setProviderSubscriptionId(String providerSubscriptionId) { this.providerSubscriptionId = providerSubscriptionId; }
+  public String getProviderCustomerId() { return providerCustomerId; }
+  public void setProviderCustomerId(String providerCustomerId) { this.providerCustomerId = providerCustomerId; }
+  public String getProviderPriceId() { return providerPriceId; }
+  public void setProviderPriceId(String providerPriceId) { this.providerPriceId = providerPriceId; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public Instant getPeriodStart() { return periodStart; }

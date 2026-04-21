@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record MockOnboardingRequest(
   @NotBlank String businessName,
-  @NotBlank String phoneNumber,
+  String phoneNumber,
   String ownerName,
   String ownerSupabaseUserId,
   String ownerEmail,

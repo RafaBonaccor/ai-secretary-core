@@ -6,6 +6,7 @@ import com.assistantcore.dto.CalendarConnectionResponse;
 import com.assistantcore.dto.WorkingHoursUpsertRequest;
 import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.CalendarConfigurationService;
+import com.assistantcore.service.SubscriptionEntitlementService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -25,18 +26,22 @@ public class CalendarConfigurationController {
 
   private final CalendarConfigurationService calendarConfigurationService;
   private final AppAuthorizationService appAuthorizationService;
+  private final SubscriptionEntitlementService subscriptionEntitlementService;
 
   public CalendarConfigurationController(
     CalendarConfigurationService calendarConfigurationService,
-    AppAuthorizationService appAuthorizationService
+    AppAuthorizationService appAuthorizationService,
+    SubscriptionEntitlementService subscriptionEntitlementService
   ) {
     this.calendarConfigurationService = calendarConfigurationService;
     this.appAuthorizationService = appAuthorizationService;
+    this.subscriptionEntitlementService = subscriptionEntitlementService;
   }
 
   @GetMapping("/tenant/{tenantId}")
   public List<CalendarConnectionResponse> listByTenant(@PathVariable UUID tenantId) {
     appAuthorizationService.requireTenantMembership(tenantId);
+    subscriptionEntitlementService.requireCalendarFeatureForTenant(tenantId);
     return calendarConfigurationService.listByTenant(tenantId);
   }
 
@@ -44,18 +49,21 @@ public class CalendarConfigurationController {
   @ResponseStatus(HttpStatus.CREATED)
   public CalendarConnectionResponse createGoogleConnection(@PathVariable UUID tenantId, @Valid @RequestBody CalendarConnectionCreateRequest request) {
     appAuthorizationService.requireTenantMembership(tenantId);
+    subscriptionEntitlementService.requireCalendarFeatureForTenant(tenantId);
     return calendarConfigurationService.createGoogleConnection(tenantId, request);
   }
 
   @PutMapping("/{connectionId}/working-hours")
   public CalendarConnectionResponse replaceWorkingHours(@PathVariable UUID connectionId, @Valid @RequestBody WorkingHoursUpsertRequest request) {
     appAuthorizationService.requireCalendarConnectionAccess(connectionId);
+    subscriptionEntitlementService.requireCalendarFeatureForConnection(connectionId);
     return calendarConfigurationService.replaceWorkingHours(connectionId, request);
   }
 
   @PutMapping("/{connectionId}/appointment-types")
   public CalendarConnectionResponse replaceAppointmentTypes(@PathVariable UUID connectionId, @Valid @RequestBody AppointmentTypesUpsertRequest request) {
     appAuthorizationService.requireCalendarConnectionAccess(connectionId);
+    subscriptionEntitlementService.requireCalendarFeatureForConnection(connectionId);
     return calendarConfigurationService.replaceAppointmentTypes(connectionId, request);
   }
 }

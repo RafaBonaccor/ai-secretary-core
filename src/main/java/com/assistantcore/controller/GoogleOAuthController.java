@@ -5,6 +5,7 @@ import com.assistantcore.dto.GoogleOAuthCallbackResponse;
 import com.assistantcore.dto.GoogleOAuthStartResponse;
 import com.assistantcore.service.AppAuthorizationService;
 import com.assistantcore.service.GoogleOAuthService;
+import com.assistantcore.service.SubscriptionEntitlementService;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,15 +20,22 @@ public class GoogleOAuthController {
 
   private final GoogleOAuthService googleOAuthService;
   private final AppAuthorizationService appAuthorizationService;
+  private final SubscriptionEntitlementService subscriptionEntitlementService;
 
-  public GoogleOAuthController(GoogleOAuthService googleOAuthService, AppAuthorizationService appAuthorizationService) {
+  public GoogleOAuthController(
+    GoogleOAuthService googleOAuthService,
+    AppAuthorizationService appAuthorizationService,
+    SubscriptionEntitlementService subscriptionEntitlementService
+  ) {
     this.googleOAuthService = googleOAuthService;
     this.appAuthorizationService = appAuthorizationService;
+    this.subscriptionEntitlementService = subscriptionEntitlementService;
   }
 
   @GetMapping("/start/{connectionId}")
   public GoogleOAuthStartResponse start(@PathVariable UUID connectionId) {
     appAuthorizationService.requireCalendarConnectionAccess(connectionId);
+    subscriptionEntitlementService.requireCalendarFeatureForConnection(connectionId);
     return googleOAuthService.startCalendarOAuth(connectionId);
   }
 
@@ -39,6 +47,7 @@ public class GoogleOAuthController {
   @GetMapping("/available-calendars/{connectionId}")
   public List<GoogleCalendarItemResponse> availableCalendars(@PathVariable UUID connectionId) {
     appAuthorizationService.requireCalendarConnectionAccess(connectionId);
+    subscriptionEntitlementService.requireCalendarFeatureForConnection(connectionId);
     return googleOAuthService.listAvailableCalendars(connectionId);
   }
 }

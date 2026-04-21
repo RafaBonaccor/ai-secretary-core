@@ -27,6 +27,7 @@ public class AIProfileService {
   private final AIProfileRepository aiProfileRepository;
   private final TenantRepository tenantRepository;
   private final ChannelInstanceRepository channelInstanceRepository;
+  private final SubscriptionEntitlementService subscriptionEntitlementService;
 
   private static final Map<String, AIProfilePresetDefinition> PRESETS = Map.of(
     "appointment_secretary_clinic",
@@ -144,11 +145,13 @@ public class AIProfileService {
   public AIProfileService(
     AIProfileRepository aiProfileRepository,
     TenantRepository tenantRepository,
-    ChannelInstanceRepository channelInstanceRepository
+    ChannelInstanceRepository channelInstanceRepository,
+    SubscriptionEntitlementService subscriptionEntitlementService
   ) {
     this.aiProfileRepository = aiProfileRepository;
     this.tenantRepository = tenantRepository;
     this.channelInstanceRepository = channelInstanceRepository;
+    this.subscriptionEntitlementService = subscriptionEntitlementService;
   }
 
   @Transactional(readOnly = true)
@@ -163,6 +166,8 @@ public class AIProfileService {
 
   @Transactional
   public AIProfileResponse createCustom(UUID tenantId, AIProfileCreateRequest request) {
+    subscriptionEntitlementService.requireCustomPromptFeatureForTenant(tenantId);
+    subscriptionEntitlementService.requireAiProfileCreationAllowed(tenantId);
     Tenant tenant = getTenant(tenantId);
     String slug = normalizeSlug(request.slug());
     ensureSlugAvailable(tenantId, slug);
@@ -197,6 +202,10 @@ public class AIProfileService {
 
   @Transactional
   public AIProfileResponse createFromPreset(UUID tenantId, AIProfilePresetCreateRequest request) {
+    if (hasText(request.additionalInstructions())) {
+      subscriptionEntitlementService.requireCustomPromptFeatureForTenant(tenantId);
+    }
+    subscriptionEntitlementService.requireAiProfileCreationAllowed(tenantId);
     Tenant tenant = getTenant(tenantId);
     AIProfilePresetDefinition preset = PRESETS.get(request.presetKey());
     if (preset == null) {

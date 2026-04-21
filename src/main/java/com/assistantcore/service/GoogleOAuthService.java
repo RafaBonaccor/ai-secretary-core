@@ -23,6 +23,7 @@ public class GoogleOAuthService {
   private final GoogleCalendarAccessService googleCalendarAccessService;
   private final GoogleCalendarCredentialService googleCalendarCredentialService;
   private final GoogleOAuthTokenCipher googleOAuthTokenCipher;
+  private final OfficialEmailPolicyService officialEmailPolicyService;
 
   public GoogleOAuthService(
     CalendarConnectionRepository calendarConnectionRepository,
@@ -30,7 +31,8 @@ public class GoogleOAuthService {
     GoogleCalendarClient googleCalendarClient,
     GoogleCalendarAccessService googleCalendarAccessService,
     GoogleCalendarCredentialService googleCalendarCredentialService,
-    GoogleOAuthTokenCipher googleOAuthTokenCipher
+    GoogleOAuthTokenCipher googleOAuthTokenCipher,
+    OfficialEmailPolicyService officialEmailPolicyService
   ) {
     this.calendarConnectionRepository = calendarConnectionRepository;
     this.oAuthStateRepository = oAuthStateRepository;
@@ -38,6 +40,7 @@ public class GoogleOAuthService {
     this.googleCalendarAccessService = googleCalendarAccessService;
     this.googleCalendarCredentialService = googleCalendarCredentialService;
     this.googleOAuthTokenCipher = googleOAuthTokenCipher;
+    this.officialEmailPolicyService = officialEmailPolicyService;
   }
 
   @Transactional
@@ -86,7 +89,7 @@ public class GoogleOAuthService {
     }
 
     GoogleCalendarClient.GoogleTokenExchangeResult tokenResult = googleCalendarClient.exchangeCodeForToken(code);
-    String email = googleCalendarClient.getUserEmail(tokenResult.accessToken());
+    String email = officialEmailPolicyService.requireOfficialEmail(googleCalendarClient.getUserEmail(tokenResult.accessToken()));
     List<GoogleCalendarItemResponse> calendars = googleCalendarClient.fetchCalendars(tokenResult.accessToken());
     GoogleCalendarItemResponse selected = calendars
       .stream()

@@ -10,4 +10,5 @@ public interface AIProfileRepository extends JpaRepository<AIProfile, UUID> {
   List<AIProfile> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
   Optional<AIProfile> findByTenantIdAndName(UUID tenantId, String name);
   Optional<AIProfile> findByTenantIdAndSlug(UUID tenantId, String slug);
+  long countByTenantId(UUID tenantId);
 }
