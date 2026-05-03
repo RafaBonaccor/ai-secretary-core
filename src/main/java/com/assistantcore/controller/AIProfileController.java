@@ -34,7 +34,6 @@ public class AIProfileController {
 
   @GetMapping("/presets")
   public List<AIProfilePresetResponse> listPresets() {
-    appAuthorizationService.requireAuthenticatedAppRequest();
     return aiProfileService.listPresets();
   }
 
