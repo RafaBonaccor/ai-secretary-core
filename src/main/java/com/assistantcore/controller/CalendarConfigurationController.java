@@ -51,7 +51,15 @@ public class CalendarConfigurationController {
   public CalendarConnectionResponse createGoogleConnection(@PathVariable UUID tenantId, @Valid @RequestBody CalendarConnectionCreateRequest request) {
     appAuthorizationService.requireTenantMembership(tenantId);
     subscriptionEntitlementService.requireCalendarFeatureForTenant(tenantId);
-    return calendarConfigurationService.createGoogleConnection(tenantId, request);
+    return calendarConfigurationService.createInternalConnection(tenantId, request);
+  }
+
+  @PostMapping("/tenant/{tenantId}")
+  @ResponseStatus(HttpStatus.CREATED)
+  public CalendarConnectionResponse createConnection(@PathVariable UUID tenantId, @Valid @RequestBody CalendarConnectionCreateRequest request) {
+    appAuthorizationService.requireTenantMembership(tenantId);
+    subscriptionEntitlementService.requireCalendarFeatureForTenant(tenantId);
+    return calendarConfigurationService.createInternalConnection(tenantId, request);
   }
 
   @PutMapping("/{connectionId}/working-hours")

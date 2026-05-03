@@ -589,11 +589,11 @@ public class EvolutionMessageOrchestrator {
     }
 
     if (enabledCapabilities.contains("create_appointment")) {
-      tools.add(
-        new OpenAIChatClient.ToolDefinition(
-          "create_customer_booking",
-          "Cria um agendamento do cliente atual no Google Calendar.",
-          objectSchema(
+        tools.add(
+          new OpenAIChatClient.ToolDefinition(
+            "create_customer_booking",
+            "Cria um agendamento do cliente atual na agenda interna.",
+            objectSchema(
             Map.of(
               "appointmentType",
               stringSchema("Tipo de atendimento, por exemplo consulta, limpeza ou retorno."),

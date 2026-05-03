@@ -44,7 +44,6 @@ public class CalendarConfigurationService {
   private final WorkingHourRepository workingHourRepository;
   private final AppointmentTypeRepository appointmentTypeRepository;
   private final TenantRepository tenantRepository;
-  private final OfficialEmailPolicyService officialEmailPolicyService;
   private final GoogleCalendarCredentialService googleCalendarCredentialService;
   private final GoogleCalendarClient googleCalendarClient;
 
@@ -53,7 +52,6 @@ public class CalendarConfigurationService {
     WorkingHourRepository workingHourRepository,
     AppointmentTypeRepository appointmentTypeRepository,
     TenantRepository tenantRepository,
-    OfficialEmailPolicyService officialEmailPolicyService,
     GoogleCalendarCredentialService googleCalendarCredentialService,
     GoogleCalendarClient googleCalendarClient
   ) {
@@ -61,7 +59,6 @@ public class CalendarConfigurationService {
     this.workingHourRepository = workingHourRepository;
     this.appointmentTypeRepository = appointmentTypeRepository;
     this.tenantRepository = tenantRepository;
-    this.officialEmailPolicyService = officialEmailPolicyService;
     this.googleCalendarCredentialService = googleCalendarCredentialService;
     this.googleCalendarClient = googleCalendarClient;
   }
@@ -72,21 +69,28 @@ public class CalendarConfigurationService {
   }
 
   @Transactional
-  public CalendarConnectionResponse createGoogleConnection(UUID tenantId, CalendarConnectionCreateRequest request) {
+  public CalendarConnectionResponse createInternalConnection(UUID tenantId, CalendarConnectionCreateRequest request) {
     Tenant tenant = tenantRepository.findById(tenantId)
       .orElseThrow(() -> new EntityNotFoundException("Tenant not found: " + tenantId));
 
-    CalendarConnection connection = new CalendarConnection();
-    connection.setId(UUID.randomUUID());
-    connection.setTenant(tenant);
-    connection.setProvider("google_calendar");
-    connection.setGoogleAccountEmail(officialEmailPolicyService.requireOfficialEmail(request.googleAccountEmail()));
-    connection.setGoogleCalendarId(request.googleCalendarId().trim());
-    connection.setGoogleCalendarName(request.googleCalendarName().trim());
-    connection.setStatus("pending_oauth");
-    connection.setSyncMode(hasText(request.syncMode()) ? normalizeKey(request.syncMode()) : "manual");
-    connection.setCreatedAt(Instant.now());
-    connection.setUpdatedAt(Instant.now());
+    Instant now = Instant.now();
+    CalendarConnection connection = calendarConnectionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+      .findFirst()
+      .orElseGet(() -> {
+        CalendarConnection created = new CalendarConnection();
+        created.setId(UUID.randomUUID());
+        created.setTenant(tenant);
+        created.setCreatedAt(now);
+        return created;
+      });
+
+    connection.setProvider("internal");
+    connection.setProviderAccountEmail(null);
+    connection.setProviderCalendarId("internal_primary");
+    connection.setCalendarName(request.calendarName().trim());
+    connection.setStatus("connected");
+    connection.setSyncMode(hasText(request.syncMode()) ? normalizeKey(request.syncMode()) : "internal");
+    connection.setUpdatedAt(now);
 
     return toResponse(calendarConnectionRepository.save(connection));
   }
@@ -185,7 +189,7 @@ public class CalendarConfigurationService {
           .filter(AppointmentType::isActive)
           .map(this::formatAppointmentType)
           .toList();
-        return new CalendarPromptContext(true, "connected", connection.getGoogleCalendarName(), workingHours, appointmentTypes);
+        return new CalendarPromptContext(true, "connected", connection.getCalendarName(), workingHours, appointmentTypes);
       })
       .orElseGet(() -> {
         List<CalendarConnection> connections = calendarConnectionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
@@ -193,7 +197,7 @@ public class CalendarConfigurationService {
           return new CalendarPromptContext(false, "not_connected", null, List.of(), List.of());
         }
         CalendarConnection latest = connections.get(0);
-        return new CalendarPromptContext(false, latest.getStatus(), latest.getGoogleCalendarName(), List.of(), List.of());
+        return new CalendarPromptContext(false, latest.getStatus(), latest.getCalendarName(), List.of(), List.of());
       });
   }
 
@@ -274,9 +278,8 @@ public class CalendarConfigurationService {
       connection.getId(),
       connection.getTenant().getId(),
       connection.getProvider(),
-      connection.getGoogleAccountEmail(),
-      connection.getGoogleCalendarId(),
-      connection.getGoogleCalendarName(),
+      connection.getProviderCalendarId(),
+      connection.getCalendarName(),
       connection.getStatus(),
       connection.getSyncMode(),
       connection.getCreatedAt(),

@@ -1,7 +1,7 @@
 package com.assistantcore.service;
 
-import com.assistantcore.dto.GoogleCalendarEventMutationRequest;
-import com.assistantcore.dto.GoogleCalendarEventResponse;
+import com.assistantcore.dto.CalendarEventMutationRequest;
+import com.assistantcore.dto.CalendarEventResponse;
 import com.assistantcore.model.AppointmentType;
 import com.assistantcore.model.CalendarConnection;
 import com.assistantcore.model.WorkingHour;
@@ -41,18 +41,18 @@ public class CustomerSchedulingService {
   private final CalendarConnectionRepository calendarConnectionRepository;
   private final WorkingHourRepository workingHourRepository;
   private final AppointmentTypeRepository appointmentTypeRepository;
-  private final GoogleCalendarEventService googleCalendarEventService;
+  private final CalendarEventService calendarEventService;
 
   public CustomerSchedulingService(
     CalendarConnectionRepository calendarConnectionRepository,
     WorkingHourRepository workingHourRepository,
     AppointmentTypeRepository appointmentTypeRepository,
-    GoogleCalendarEventService googleCalendarEventService
+    CalendarEventService calendarEventService
   ) {
     this.calendarConnectionRepository = calendarConnectionRepository;
     this.workingHourRepository = workingHourRepository;
     this.appointmentTypeRepository = appointmentTypeRepository;
-    this.googleCalendarEventService = googleCalendarEventService;
+    this.calendarEventService = calendarEventService;
   }
 
   @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
@@ -63,7 +63,7 @@ public class CustomerSchedulingService {
     int durationMinutes = resolveDurationMinutes(connection, request.appointmentType(), request.durationMinutes());
     OffsetDateTime desiredEnd = resolveEndDateTime(desiredStart, request.endDateTime(), durationMinutes, businessZone);
 
-    List<GoogleCalendarEventResponse> events = googleCalendarEventService.listEvents(
+    List<CalendarEventResponse> events = calendarEventService.listEvents(
       tenantId,
       startOfDay(desiredStart).toInstant(),
       startOfDay(desiredStart).plusDays(MAX_LOOKAHEAD_DAYS).toInstant(),
@@ -96,7 +96,7 @@ public class CustomerSchedulingService {
 
   @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
   public List<CustomerBooking> listCustomerBookings(UUID tenantId, CustomerIdentity customerIdentity, Instant from, Instant to) {
-    List<GoogleCalendarEventResponse> events = googleCalendarEventService.listEvents(
+    List<CalendarEventResponse> events = calendarEventService.listEvents(
       tenantId,
       from == null ? Instant.now().minus(30, ChronoUnit.DAYS) : from,
       to == null ? Instant.now().plus(180, ChronoUnit.DAYS) : to,
@@ -119,7 +119,7 @@ public class CustomerSchedulingService {
     int durationMinutes = resolveDurationMinutes(connection, request.appointmentType(), request.durationMinutes());
     OffsetDateTime desiredEnd = resolveEndDateTime(desiredStart, request.endDateTime(), durationMinutes, businessZone);
 
-    List<GoogleCalendarEventResponse> events = googleCalendarEventService.listEvents(
+    List<CalendarEventResponse> events = calendarEventService.listEvents(
       tenantId,
       startOfDay(desiredStart).toInstant(),
       startOfDay(desiredStart).plusDays(MAX_LOOKAHEAD_DAYS).toInstant(),
@@ -127,14 +127,19 @@ public class CustomerSchedulingService {
     );
     ensureSlotAvailable(connection, events, desiredStart, desiredEnd, null);
 
-    GoogleCalendarEventResponse created = googleCalendarEventService.createEvent(
+    CalendarEventResponse created = calendarEventService.createEvent(
       tenantId,
-      new GoogleCalendarEventMutationRequest(
+      new CalendarEventMutationRequest(
         eventSummary(customerIdentity, request.appointmentType()),
         buildDescription(customerIdentity, request.notes(), request.appointmentType()),
         desiredStart.toString(),
         desiredEnd.toString(),
         connection.getTenant() == null ? null : connection.getTenant().getTimezone(),
+        customerIdentity.customerName(),
+        customerIdentity.phoneNumber(),
+        customerIdentity.remoteJid(),
+        request.appointmentType(),
+        "whatsapp_assistant",
         buildMetadata(customerIdentity, tenantId, request.appointmentType())
       )
     );
@@ -145,7 +150,7 @@ public class CustomerSchedulingService {
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public CustomerBooking rescheduleCustomerBooking(UUID tenantId, CustomerIdentity customerIdentity, RescheduleRequest request) {
     CalendarConnection connection = requireConnectedConnection(tenantId);
-    GoogleCalendarEventResponse existing = requireOwnedEvent(tenantId, customerIdentity, request.eventId());
+    CalendarEventResponse existing = requireOwnedEvent(tenantId, customerIdentity, request.eventId());
     ZoneId businessZone = resolveBusinessZone(connection);
 
     OffsetDateTime currentStart = requireDateTime(existing.startDateTime(), "existing.startDateTime", businessZone);
@@ -156,7 +161,7 @@ public class CustomerSchedulingService {
     int durationMinutes = request.durationMinutes() == null || request.durationMinutes() <= 0 ? existingDuration : request.durationMinutes();
     OffsetDateTime desiredEnd = resolveEndDateTime(desiredStart, request.endDateTime(), durationMinutes, businessZone);
 
-    List<GoogleCalendarEventResponse> events = googleCalendarEventService.listEvents(
+    List<CalendarEventResponse> events = calendarEventService.listEvents(
       tenantId,
       startOfDay(desiredStart).toInstant(),
       startOfDay(desiredStart).plusDays(MAX_LOOKAHEAD_DAYS).toInstant(),
@@ -164,15 +169,20 @@ public class CustomerSchedulingService {
     );
     ensureSlotAvailable(connection, events, desiredStart, desiredEnd, existing.id());
 
-    GoogleCalendarEventResponse updated = googleCalendarEventService.updateEvent(
+    CalendarEventResponse updated = calendarEventService.updateEvent(
       tenantId,
       existing.id(),
-      new GoogleCalendarEventMutationRequest(
+      new CalendarEventMutationRequest(
         null,
         request.notes(),
         desiredStart.toString(),
         desiredEnd.toString(),
         connection.getTenant() == null ? null : connection.getTenant().getTimezone(),
+        customerIdentity.customerName(),
+        customerIdentity.phoneNumber(),
+        customerIdentity.remoteJid(),
+        request.appointmentType(),
+        "whatsapp_assistant",
         buildMetadata(customerIdentity, tenantId, request.appointmentType())
       )
     );
@@ -182,21 +192,21 @@ public class CustomerSchedulingService {
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void cancelCustomerBooking(UUID tenantId, CustomerIdentity customerIdentity, String eventId) {
-    GoogleCalendarEventResponse existing = requireOwnedEvent(tenantId, customerIdentity, eventId);
-    googleCalendarEventService.deleteEvent(tenantId, existing.id());
+    CalendarEventResponse existing = requireOwnedEvent(tenantId, customerIdentity, eventId);
+    calendarEventService.deleteEvent(tenantId, existing.id());
   }
 
   private CalendarConnection requireConnectedConnection(UUID tenantId) {
     return calendarConnectionRepository.findFirstByTenantIdAndStatusOrderByUpdatedAtDesc(tenantId, "connected")
-      .orElseThrow(() -> new EntityNotFoundException("No connected Google Calendar found for tenant: " + tenantId));
+      .orElseThrow(() -> new EntityNotFoundException("No connected calendar found for tenant: " + tenantId));
   }
 
-  private GoogleCalendarEventResponse requireOwnedEvent(UUID tenantId, CustomerIdentity customerIdentity, String eventId) {
+  private CalendarEventResponse requireOwnedEvent(UUID tenantId, CustomerIdentity customerIdentity, String eventId) {
     if (eventId == null || eventId.isBlank()) {
       throw new IllegalArgumentException("eventId is required");
     }
 
-    return googleCalendarEventService.listEvents(
+    return calendarEventService.listEvents(
       tenantId,
       Instant.now().minus(60, ChronoUnit.DAYS),
       Instant.now().plus(365, ChronoUnit.DAYS),
@@ -231,7 +241,7 @@ public class CustomerSchedulingService {
 
   private void ensureSlotAvailable(
     CalendarConnection connection,
-    List<GoogleCalendarEventResponse> events,
+    List<CalendarEventResponse> events,
     OffsetDateTime desiredStart,
     OffsetDateTime desiredEnd,
     String ignoredEventId
@@ -304,7 +314,7 @@ public class CustomerSchedulingService {
   }
 
   private boolean hasConflict(
-    List<GoogleCalendarEventResponse> events,
+    List<CalendarEventResponse> events,
     OffsetDateTime desiredStart,
     OffsetDateTime desiredEnd,
     String ignoredEventId
@@ -326,7 +336,7 @@ public class CustomerSchedulingService {
 
   private List<SuggestedSlot> suggestSlots(
     CalendarConnection connection,
-    List<GoogleCalendarEventResponse> events,
+    List<CalendarEventResponse> events,
     OffsetDateTime anchor,
     int durationMinutes,
     int limit,
@@ -430,7 +440,7 @@ public class CustomerSchedulingService {
     return metadata;
   }
 
-  private boolean isOwnedByCustomer(GoogleCalendarEventResponse event, CustomerIdentity customerIdentity) {
+  private boolean isOwnedByCustomer(CalendarEventResponse event, CustomerIdentity customerIdentity) {
     Map<String, String> metadata = event.privateMetadata();
     if (metadata != null && !metadata.isEmpty()) {
       String metadataPhone = metadata.get("customerPhone");
@@ -453,11 +463,11 @@ public class CustomerSchedulingService {
       description.contains("WhatsApp JID: " + customerIdentity.remoteJid().trim());
   }
 
-  private CustomerBooking toCustomerBooking(GoogleCalendarEventResponse event) {
+  private CustomerBooking toCustomerBooking(CalendarEventResponse event) {
     return new CustomerBooking(event.id(), event.summary(), event.startDateTime(), event.endDateTime(), event.status());
   }
 
-  private Optional<Instant> parseEventStart(GoogleCalendarEventResponse event) {
+  private Optional<Instant> parseEventStart(CalendarEventResponse event) {
     return parseOffsetDateTime(event.startDateTime(), ZoneOffset.UTC).map(OffsetDateTime::toInstant);
   }
 

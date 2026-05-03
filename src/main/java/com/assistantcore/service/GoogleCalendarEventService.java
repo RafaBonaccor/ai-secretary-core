@@ -91,9 +91,9 @@ public class GoogleCalendarEventService {
 
     try {
       List<GoogleCalendarEventResponse> events = listEvents(tenantId, Instant.now(), Instant.now().plus(7, ChronoUnit.DAYS), 8);
-      return new UpcomingEventsContext(true, connection.getGoogleCalendarName(), events);
+      return new UpcomingEventsContext(true, connection.getCalendarName(), events);
     } catch (Exception exception) {
-      return new UpcomingEventsContext(true, connection.getGoogleCalendarName(), List.of());
+      return new UpcomingEventsContext(true, connection.getCalendarName(), List.of());
     }
   }
 
@@ -103,7 +103,7 @@ public class GoogleCalendarEventService {
   }
 
   private String resolvedCalendarId(CalendarConnection connection) {
-    return hasText(connection.getGoogleCalendarId()) ? connection.getGoogleCalendarId().trim() : "primary";
+    return hasText(connection.getProviderCalendarId()) ? connection.getProviderCalendarId().trim() : "primary";
   }
 
   private boolean hasText(String value) {

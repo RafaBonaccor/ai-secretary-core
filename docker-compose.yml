@@ -25,7 +25,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/assistant_core
+      DB_URL: jdbc:postgresql://postgres:5432/assistant_core?currentSchema=assistant_core
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
       SERVER_PORT: 8090

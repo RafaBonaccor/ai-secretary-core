@@ -134,7 +134,6 @@ Le credenziali Basic Auth sopra sono solo per sviluppo locale e vanno cambiate p
 Pubblici:
 
 - `GET /api/v1/health`
-- `POST /api/v1/onboarding/mock`
 - `POST /api/v1/webhooks/evolution/messages`
 - `GET /api/v1/oauth/google/calendar/callback`
 
@@ -152,6 +151,17 @@ Protetti con Basic Auth:
 - `PUT /api/v1/calendar-connections/{connectionId}/appointment-types`
 - `GET /api/v1/oauth/google/calendar/start/{connectionId}`
 - `GET /api/v1/oauth/google/calendar/available-calendars/{connectionId}`
+- `POST /api/v1/onboarding/mock`
+- `POST /api/v1/app-users/sync`
+- `GET /api/v1/app-users/{supabaseUserId}/memberships`
+- `GET /api/v1/app-users/{supabaseUserId}/workspace`
+
+Rotte sensibili protette anche da contesto utente applicativo:
+
+- oltre alla Basic Auth, queste rotte si aspettano anche l'header `X-App-User-Id`
+- il valore deve essere il `supabaseUserId` dell'utente applicativo autenticato
+- `assistant-core` usa questo header per ripetere i controlli di ownership su app user, tenant, channel instance e calendar connection
+- `ai-secretary-web` imposta questo header automaticamente nel BFF; client diretti devono valorizzarlo in modo coerente
 
 Credenziali di default per i test:
 
@@ -325,11 +335,10 @@ Obiettivo: mettere online uno staging sicuro abbastanza per test reali, non anco
 
 ### 5. Hardening minimo prima di staging pubblico
 
-- rimuovere o limitare `POST /api/v1/onboarding/mock`
 - aggiungere firma o secret ai webhook Evolution
-- introdurre auth utente vera nel frontend/admin
 - evitare Basic Auth globale condivisa per tenant diversi
 - ruotare le password default di sviluppo
+- mantenere il controllo `X-App-User-Id` solo dietro servizi trusted come il BFF
 
 ### 6. Cose che puoi gia validare in staging
 
@@ -367,6 +376,10 @@ Richiesta:
 PowerShell:
 
 ```powershell
+$pair = 'assistant_admin:change_me_assistant_password'
+$bytes = [System.Text.Encoding]::ASCII.GetBytes($pair)
+$token = [Convert]::ToBase64String($bytes)
+
 $body = @{
   businessName = "Studio Dentistico Bianchi"
   phoneNumber = "393513845222"
@@ -380,6 +393,10 @@ $body = @{
 Invoke-RestMethod `
   -Method Post `
   -Uri "http://127.0.0.1:8090/api/v1/onboarding/mock" `
+  -Headers @{
+    Authorization = "Basic $token"
+    "X-App-User-Id" = "supabase-user-id-demo"
+  } `
   -ContentType "application/json" `
   -Body $body | ConvertTo-Json -Depth 8
 ```
@@ -411,6 +428,7 @@ Invoke-RestMethod `
   -Uri "http://127.0.0.1:8090/api/v1/ai-profiles/tenant/TENANT_ID/from-preset" `
   -Headers @{
     Authorization = "Basic $token"
+    "X-App-User-Id" = "supabase-user-id-demo"
     "Content-Type" = "application/json"
   } `
   -Body $body | ConvertTo-Json -Depth 8

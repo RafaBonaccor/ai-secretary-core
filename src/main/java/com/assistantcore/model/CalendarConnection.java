@@ -25,13 +25,13 @@ public class CalendarConnection {
   private String provider;
 
   @Column(name = "google_account_email")
-  private String googleAccountEmail;
+  private String providerAccountEmail;
 
   @Column(name = "google_calendar_id")
-  private String googleCalendarId;
+  private String providerCalendarId;
 
   @Column(name = "google_calendar_name")
-  private String googleCalendarName;
+  private String calendarName;
 
   @Column(nullable = false)
   private String status;
@@ -51,12 +51,12 @@ public class CalendarConnection {
   public void setTenant(Tenant tenant) { this.tenant = tenant; }
   public String getProvider() { return provider; }
   public void setProvider(String provider) { this.provider = provider; }
-  public String getGoogleAccountEmail() { return googleAccountEmail; }
-  public void setGoogleAccountEmail(String googleAccountEmail) { this.googleAccountEmail = googleAccountEmail; }
-  public String getGoogleCalendarId() { return googleCalendarId; }
-  public void setGoogleCalendarId(String googleCalendarId) { this.googleCalendarId = googleCalendarId; }
-  public String getGoogleCalendarName() { return googleCalendarName; }
-  public void setGoogleCalendarName(String googleCalendarName) { this.googleCalendarName = googleCalendarName; }
+  public String getProviderAccountEmail() { return providerAccountEmail; }
+  public void setProviderAccountEmail(String providerAccountEmail) { this.providerAccountEmail = providerAccountEmail; }
+  public String getProviderCalendarId() { return providerCalendarId; }
+  public void setProviderCalendarId(String providerCalendarId) { this.providerCalendarId = providerCalendarId; }
+  public String getCalendarName() { return calendarName; }
+  public void setCalendarName(String calendarName) { this.calendarName = calendarName; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public String getSyncMode() { return syncMode; }

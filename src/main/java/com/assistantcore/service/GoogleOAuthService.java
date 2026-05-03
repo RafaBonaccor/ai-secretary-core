@@ -93,7 +93,7 @@ public class GoogleOAuthService {
     List<GoogleCalendarItemResponse> calendars = googleCalendarClient.fetchCalendars(tokenResult.accessToken());
     GoogleCalendarItemResponse selected = calendars
       .stream()
-      .filter(item -> item.id().equals(connection.getGoogleCalendarId()))
+      .filter(item -> item.id().equals(connection.getProviderCalendarId()))
       .findFirst()
       .orElseGet(() -> calendars.stream().filter(GoogleCalendarItemResponse::primary).findFirst().orElse(null));
 
@@ -103,10 +103,10 @@ public class GoogleOAuthService {
       tokenResult.refreshToken(),
       tokenResult.expiresAt()
     );
-    connection.setGoogleAccountEmail(email);
+    connection.setProviderAccountEmail(email);
     if (selected != null) {
-      connection.setGoogleCalendarId(selected.id());
-      connection.setGoogleCalendarName(selected.summary());
+      connection.setProviderCalendarId(selected.id());
+      connection.setCalendarName(selected.summary());
       connection.setStatus("connected");
     } else {
       connection.setStatus("calendar_selection_required");
@@ -121,9 +121,9 @@ public class GoogleOAuthService {
       connection.getId(),
       "google_calendar",
       connection.getStatus(),
-      connection.getGoogleAccountEmail(),
-      connection.getGoogleCalendarId(),
-      connection.getGoogleCalendarName(),
+      connection.getProviderAccountEmail(),
+      connection.getProviderCalendarId(),
+      connection.getCalendarName(),
       calendars
     );
   }

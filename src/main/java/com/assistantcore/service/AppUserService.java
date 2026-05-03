@@ -167,8 +167,8 @@ public class AppUserService {
       channelInstance == null ? null : channelInstance.getInstanceName(),
       calendarConnection == null ? null : calendarConnection.getId(),
       calendarConnection == null ? null : calendarConnection.getStatus(),
-      calendarConnection == null ? null : calendarConnection.getGoogleAccountEmail(),
-      calendarConnection == null ? null : calendarConnection.getGoogleCalendarName(),
+      calendarConnection == null ? null : calendarConnection.getProvider(),
+      calendarConnection == null ? null : calendarConnection.getCalendarName(),
       subscription
     );
   }
